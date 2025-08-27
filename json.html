@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Export clienti JSON</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body>
+  <h1>Scarica collezione "clienti"</h1>
+  <button onclick="exportClienti()">📥 Scarica JSON</button>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+    // Configurazione Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyDYiXjIGccT_jD8a6C4iW8gMgh1ruby6sg",
+      authDomain: "gestionale-kneip.firebaseapp.com",
+      projectId: "gestionale-kneip",
+      storageBucket: "gestionale-kneip.firebasestorage.app",
+      messagingSenderId: "154033977872",
+      appId: "1:154033977872:web:e7c5d15698ad6ccf4f2895",
+      measurementId: "G-ER3BHZWYP5"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Funzione per esportare la collezione "clienti"
+    async function exportClienti() {
+      try {
+        const querySnapshot = await getDocs(collection(db, "clienti"));
+        const items = [];
+        querySnapshot.forEach((doc) => {
+          items.push({ id: doc.id, ...doc.data() });
+        });
+
+        // Salvataggio JSON come file
+        const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+        saveAs(blob, "clienti.json");
+      } catch (err) {
+        console.error("Errore durante l'export:", err);
+        alert("Impossibile leggere la collezione (controlla le regole di Firestore).");
+      }
+    }
+
+    // Rende disponibile la funzione al bottone
+    window.exportClienti = exportClienti;
+  </script>
+</body>
+</html>
