@@ -1,105 +1,75 @@
-let clientiGraph = [];
+// === DATI DI ESEMPIO ===
+// Orari della giornata
+const orari = ["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00"];
 
-async function caricaClientiGraph() {
-  const res = await fetch("clienti.json");
-  clientiGraph = await res.json();
-  if (!clientiGraph.length) return;
+// Dati per ogni orario
+const bambini = [5, 8, 12, 9, 6, 7, 10, 8, 12, 5];
+const adulti  = [10, 12, 15, 20, 14, 18, 16, 22, 19, 12];
+const prezzoBambino = 5;
+const prezzoAdulto = 10;
 
-  // Popola tabella completa
-  creaTabellaCompleta(clientiGraph);
+// Calcoli
+const totale = bambini.map((b,i) => b + adulti[i]);
+const incassoBambini = bambini.map(b => b * prezzoBambino);
+const incassoAdulti  = adulti.map(a => a * prezzoAdulto);
+const incassoTotale  = totale.map((t,i) => incassoBambini[i] + incassoAdulti[i]);
 
-  // Prepara dataset
-  const perGiorno = {};
-  const perSettimanaOrario = {};
+// === TABELLA ===
+function creaTabella() {
+  const table = document.getElementById("orari-table");
 
-  clientiGraph.forEach(c => {
-    const isBambino = (c.descrizione||"").toLowerCase().includes("bamb");
-    const prezzo = isBambino ? 2 : 3;
-    const giorno = c.data;
-    const orario = c.orario ? c.orario.slice(0,2) : "00";
-    const weekday = new Date(c.data).toLocaleDateString("it-IT",{weekday:"short"});
+  // Intestazione
+  let thead = "<tr><th>Orario</th><th>Bambini</th><th>Adulti</th><th>Totale</th><th>Incasso Bambini (€)</th><th>Incasso Adulti (€)</th><th>Incasso Totale (€)</th></tr>";
 
-    if (!perGiorno[giorno]) perGiorno[giorno] = {clienti:0, adulti:0, bambini:0, incasso:0};
-    perGiorno[giorno].clienti++;
-    if (isBambino) perGiorno[giorno].bambini++; else perGiorno[giorno].adulti++;
-    perGiorno[giorno].incasso += prezzo;
+  // Righe
+  let rows = orari.map((ora,i) => 
+    `<tr>
+      <td>${ora}</td>
+      <td>${bambini[i]}</td>
+      <td>${adulti[i]}</td>
+      <td>${totale[i]}</td>
+      <td>${incassoBambini[i]}</td>
+      <td>${incassoAdulti[i]}</td>
+      <td>${incassoTotale[i]}</td>
+    </tr>`
+  ).join("");
 
-    if (!perSettimanaOrario[weekday]) perSettimanaOrario[weekday] = {};
-    if (!perSettimanaOrario[weekday][orario]) perSettimanaOrario[weekday][orario] = 0;
-    perSettimanaOrario[weekday][orario]++;
-  });
-
-  const dati = Object.entries(perGiorno).map(([data,val])=>({data,...val}));
-
-  // 1) Bar Clienti per Giorno
-  Plotly.newPlot("chart-clienti-giorno", [{
-    x: dati.map(d=>d.data),
-    y: dati.map(d=>d.clienti),
-    type:"bar",
-    marker:{color:"#2563eb"}
-  }], {title:"Clienti per Giorno"});
-
-  // 2) Linea Incassi
-  Plotly.newPlot("chart-incassi", [{
-    x: dati.map(d=>d.data),
-    y: dati.map(d=>d.incasso),
-    type:"scatter",
-    mode:"lines+markers",
-    line:{shape:"spline", color:"#16a34a"}
-  }], {title:"Incasso Giornaliero (€)"});
-
-  // 3) Pie Adulti vs Bambini
-  const totAdulti = dati.reduce((a,b)=>a+b.adulti,0);
-  const totBambini = dati.reduce((a,b)=>a+b.bambini,0);
-  Plotly.newPlot("chart-pie", [{
-    values:[totAdulti,totBambini],
-    labels:["Adulti","Bambini"],
-    type:"pie"
-  }], {title:"Distribuzione Clienti"});
-
-  // 4) Stacked bar (Adulti + Bambini)
-  Plotly.newPlot("chart-stacked", [
-    {x:dati.map(d=>d.data), y:dati.map(d=>d.adulti), name:"Adulti", type:"bar"},
-    {x:dati.map(d=>d.data), y:dati.map(d=>d.bambini), name:"Bambini", type:"bar"}
-  ], {barmode:"stack", title:"Clienti per Giorno (Stacked)"});
-
-  // 5) Heatmap GiornoSettimana vs Orario
-  const weekdays = ["lun","mar","mer","gio","ven","sab","dom"];
-  const hours = [...Array(24).keys()].map(h=>String(h).padStart(2,"0"));
-
-  const z = weekdays.map(giorno =>
-    hours.map(h => perSettimanaOrario[giorno]?.[h] || 0)
-  );
-
-  Plotly.newPlot("chart-heatmap", [{
-    z, x:hours, y:weekdays,
-    type:"heatmap",
-    colorscale:"Blues"
-  }], {title:"Clienti per Giorno/Orario"});
+  table.innerHTML = thead + rows;
 }
+creaTabella();
 
-function creaTabellaCompleta(dati) {
-  const table = document.getElementById("full-table");
-  table.innerHTML = "";
-  const thead = document.createElement("thead");
-  const headerRow = document.createElement("tr");
-  ["Data","Orario","Descrizione"].forEach(h=>{
-    const th=document.createElement("th"); th.textContent=h; headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
+// === GRAFICI ===
 
-  const tbody = document.createElement("tbody");
-  dati.forEach(r=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML = `
-      <td>${r.data}</td>
-      <td>${r.orario || "-"}</td>
-      <td>${r.descrizione || "-"}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-}
+// 1. Clienti per Orario
+Plotly.newPlot("chart-clienti-orario", [
+  { x: orari, y: bambini, type:"bar", name:"Bambini" },
+  { x: orari, y: adulti, type:"bar", name:"Adulti" }
+], { barmode:"stack", title:"Clienti per Orario" });
 
-document.addEventListener("DOMContentLoaded", caricaClientiGraph);
+// 2. Incassi per Orario
+Plotly.newPlot("chart-incassi-orario", [
+  { x: orari, y: incassoBambini, type:"bar", name:"Incasso Bambini" },
+  { x: orari, y: incassoAdulti, type:"bar", name:"Incasso Adulti" }
+], { barmode:"stack", title:"Incassi per Orario (€)" });
+
+// 3. Pie Chart Adulti vs Bambini
+Plotly.newPlot("chart-pie", [{
+  labels:["Bambini","Adulti"],
+  values:[bambini.reduce((a,b)=>a+b,0), adulti.reduce((a,b)=>a+b,0)],
+  type:"pie"
+}], { title:"Distribuzione Clienti" });
+
+// 4. Linea andamento
+Plotly.newPlot("chart-linea", [
+  { x: orari, y: bambini, mode:"lines+markers", name:"Bambini" },
+  { x: orari, y: adulti, mode:"lines+markers", name:"Adulti" }
+], { title:"Andamento Clienti per Orario" });
+
+// 5. Heatmap Orari vs Tipo Cliente
+Plotly.newPlot("chart-heatmap", [{
+  z: [bambini, adulti],
+  x: orari,
+  y: ["Bambini","Adulti"],
+  type:"heatmap",
+  colorscale:"Blues"
+}], { title:"Heatmap Clienti per Orario" });
