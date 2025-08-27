@@ -1,215 +1,111 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Statistiche Avanzate - Cruscotto Clienti</title>
-
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statistiche Clienti Avanzate</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
 <style>
-  /* Stili minimi per un layout leggibile (puoi rimuovere se usi style.css) */
-  :root{ --gap:12px; --card-bg:#fff; --muted:#6b7280; --accent:#2563eb; }
-  body{ font-family:Inter, system-ui, Arial; margin:16px; background:#f6f7fb; color:#111; }
-  header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
-  header h1{ margin:0; font-size:1.25rem; }
-  .nav-buttons{ display:flex; gap:8px; }
-  button, select, input { font:inherit; padding:8px 10px; border-radius:8px; border:1px solid #ddd; background:#fff; }
-  .grid{ display:grid; gap:var(--gap); }
-  .filters{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
-  .kpis{ display:grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
-  .card{ background:var(--card-bg); padding:12px; border-radius:12px; box-shadow:0 6px 18px rgba(16,24,40,0.04); }
-  .card h4{ margin:0; color:var(--muted); font-size:0.85rem; }
-  .card p{ margin:6px 0 0; font-size:1.15rem; font-weight:700; }
-  .main-charts{ display:grid; grid-template-columns: 1fr 380px; gap:12px; align-items:start; }
-  .right-column{ display:grid; gap:12px; }
-  .chart{ min-height:280px; background:#fff; padding:8px; border-radius:8px; box-shadow:0 4px 12px rgba(2,6,23,0.04); }
-  .tabs{ display:flex; gap:8px; margin:8px 0; }
-  .tabs button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
-  .table-controls{ display:flex; gap:8px; align-items:center; margin:8px 0; }
-  table{ width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 6px 18px rgba(16,24,40,0.04); }
-  th,td{ padding:8px 10px; border-bottom:1px solid #eee; text-align:left; font-size:0.95rem; }
-  th{ background:#fafafa; cursor:pointer; user-select:none; }
-  tr.totale{ font-weight:700; background: #f3f4f6; }
-  .small{ font-size:0.85rem; color:var(--muted); }
-  .export{ margin-left:auto; }
-  @media (max-width:1000px){ .main-charts{ grid-template-columns: 1fr; } .right-column{ order:2 } }
+body{font-family:Inter,Arial,sans-serif;margin:16px;background:#f4f6f8;color:#111;}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+header h1{margin:0;font-size:1.3rem;}
+.filters{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
+button, select, input{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;}
+.card{background:#fff;padding:12px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.05);}
+.card h4{margin:0;color:#555;font-size:0.85rem;}
+.card p{margin:6px 0 0;font-weight:700;font-size:1.15rem;}
+.main{display:grid;grid-template-columns:1fr 350px;gap:12px;}
+.chart{min-height:300px;background:#fff;padding:8px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.05);}
+.right-panel{display:grid;gap:12px;}
+.table-container{overflow:auto;border-radius:8px;}
+table{width:100%;border-collapse:collapse;background:#fff;}
+th,td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left;font-size:0.95rem;}
+th{background:#fafafa;cursor:pointer;}
+tr.totale{font-weight:700;background:#f1f3f5;}
+.small{font-size:0.85rem;color:#555;}
+.tabs{display:flex;gap:8px;margin-bottom:8px;}
+.tabs button.active{background:#2563eb;color:#fff;border-color:#2563eb;}
 </style>
 </head>
 <body>
-
 <header>
-  <div>
-    <h1>📈 Statistiche Avanzate - Cruscotto Clienti</h1>
-    <div class="small">Filtro, analisi oraria (Totale / Massimo / Minimo), occupazione stimata e molto altro</div>
-  </div>
-  <div class="nav-buttons">
-    <a href="index.html"><button>⬅️ Home</button></a>
-    <a href="stats.html"><button>📊 Stats</button></a>
-  </div>
+<h1>📊 Statistiche Avanzate - Clienti</h1>
+<div class="small">Analisi dettagliata dal vivo con previsione ore 9-17</div>
 </header>
 
-<!-- FILTRI -->
 <section class="filters">
-  <label class="small">Da
-    <input type="date" id="start-date" />
-  </label>
-  <label class="small">A
-    <input type="date" id="end-date" />
-  </label>
-  <label class="small">Tipo
-    <select id="filter-type">
-      <option value="all">Tutti</option>
-      <option value="adulti">Adulti</option>
-      <option value="bambini">Bambini</option>
-    </select>
-  </label>
-
-  <label class="small">Window media mobile (giorni)
-    <input type="number" id="roll-window" min="1" value="7" style="width:90px"/>
-  </label>
-
-  <button id="apply-filters">Applica</button>
-  <button id="reset-filters">Reset</button>
-  <div class="export" style="margin-left:auto">
-    <button id="export-hourly">Esporta Tabella Oraria CSV</button>
-  </div>
+<label class="small">Da <input type="date" id="start-date"></label>
+<label class="small">A <input type="date" id="end-date"></label>
+<label class="small">Tipo
+<select id="filter-type">
+<option value="all">Tutti</option>
+<option value="adulti">Adulti</option>
+<option value="bambini">Bambini</option>
+</select></label>
+<button id="apply-filters">Applica</button>
+<button id="reset-filters">Reset</button>
+<button id="export-hourly">Esporta Oraria CSV</button>
 </section>
 
-<!-- KPI -->
 <section class="kpis">
-  <div class="card">
-    <h4>Clienti totali</h4>
-    <p id="kpi-total">0</p>
-  </div>
-  <div class="card">
-    <h4>Incasso totale</h4>
-    <p id="kpi-revenue">0 €</p>
-  </div>
-  <div class="card">
-    <h4>Media clienti/giorno</h4>
-    <p id="kpi-avg">0</p>
-  </div>
-  <div class="card">
-    <h4>Saturazione max rilevata</h4>
-    <p id="kpi-saturation">0%</p>
-  </div>
-  <div class="card">
-    <h4>Ora di picco (stimata)</h4>
-    <p id="kpi-peak">-</p>
-  </div>
-  <div class="card">
-    <h4>Mediana interarrivo</h4>
-    <p id="kpi-med-inter">-</p>
-  </div>
+<div class="card"><h4>Clienti totali</h4><p id="kpi-total">0</p></div>
+<div class="card"><h4>Incasso totale</h4><p id="kpi-revenue">0 €</p></div>
+<div class="card"><h4>Media clienti/giorno</h4><p id="kpi-avg">0</p></div>
+<div class="card"><h4>Saturazione max</h4><p id="kpi-saturation">0%</p></div>
+<div class="card"><h4>Ora di picco stimata</h4><p id="kpi-peak">-</p></div>
+<div class="card"><h4>Previsti client/h</h4><p id="kpi-predict">-</p></div>
 </section>
 
-<!-- AREA PRINCIPALE: GRAFICI + PANNELLO DESTRO -->
-<section class="main-charts">
-  <div>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="overview">Panoramica</button>
-        <button class="tab-btn" data-tab="per-hour">Analisi per orario</button>
-        <button class="tab-btn" data-tab="occupancy">Occupazione</button>
-        <button class="tab-btn" data-tab="anomalies">Anomalie & Trend</button>
-      </div>
+<div class="main">
+<div>
+<div class="tabs">
+<button class="tab-btn active" data-tab="per-hour">Tabella Oraria</button>
+<button class="tab-btn" data-tab="occupancy">Occupazione</button>
+<button class="tab-btn" data-tab="trend">Trend</button>
+</div>
 
-      <div style="margin-left:auto" class="small">Permanenza media: <strong>1h 15m</strong> • Capienza: <strong>60</strong></div>
-    </div>
+<div id="tab-per-hour" class="tab-panel">
+<div class="table-container">
+<table id="hourly-table">
+<thead>
+<tr>
+<th data-col="hour">Ora</th><th data-col="adulti">Adulti</th><th data-col="bambini">Bambini</th>
+<th data-col="totale">Totale</th><th data-col="incasso">Incasso (€)</th>
+<th data-col="predicted">Previsti</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
 
-    <!-- TAB: OVERVIEW -->
-    <div id="tab-overview" class="tab-panel" style="margin-top:8px;">
-      <div class="chart" id="chart-trend-daily"></div>
-      <div style="height:12px"></div>
-      <div class="chart" id="chart-dow"></div>
-      <div style="height:12px"></div>
-      <div class="chart" id="chart-stack-type"></div>
-    </div>
+<div id="tab-occupancy" class="tab-panel" style="display:none;">
+<div class="chart" id="chart-occupancy"></div>
+</div>
 
-    <!-- TAB: PER HOUR (TABELLA INTERATTIVA) -->
-    <div id="tab-per-hour" class="tab-panel" style="display:none; margin-top:8px;">
-      <div class="table-controls">
-        <label class="small">Visualizza:
-          <select id="hour-metric">
-            <option value="total">Totale (arrivi per ora)</option>
-            <option value="max">Massimo (per ora, per giorno)</option>
-            <option value="min">Minimo (per ora, per giorno)</option>
-          </select>
-        </label>
+<div id="tab-trend" class="tab-panel" style="display:none;">
+<div class="chart" id="chart-trend-daily"></div>
+</div>
+</div>
 
-        <label class="small">Ordinamento:
-          <select id="hour-sort">
-            <option value="hour">Ora</option>
-            <option value="total_desc">Totale ↓</option>
-            <option value="total_asc">Totale ↑</option>
-            <option value="incasso_desc">Incasso ↓</option>
-            <option value="incasso_asc">Incasso ↑</option>
-          </select>
-        </label>
+<aside class="right-panel">
+<div class="card">
+<h4>Top fasce orarie</h4>
+<div id="top-hours-list" class="small"></div>
+</div>
+<div class="card">
+<h4>Azioni</h4>
+<div style="display:flex;gap:8px;margin-top:8px;">
+<button id="export-daily">Esporta Giornaliera CSV</button>
+<button id="recompute">Ricalcola</button>
+</div>
+</div>
+</aside>
+</div>
 
-        <div style="margin-left:auto" class="small">Tip: clicca intestazioni per ordinare</div>
-      </div>
-
-      <div style="overflow:auto; border-radius:8px;">
-        <table id="hourly-table">
-          <thead>
-            <tr>
-              <th data-col="hour">Ora</th>
-              <th data-col="adulti">Adulti</th>
-              <th data-col="bambini">Bambini</th>
-              <th data-col="totale">Totale</th>
-              <th data-col="incasso">Incasso (€)</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- TAB: OCCUPANCY -->
-    <div id="tab-occupancy" class="tab-panel" style="display:none; margin-top:8px;">
-      <div class="chart" id="chart-occupancy"></div>
-      <div class="chart" id="chart-heatmap-hour"></div>
-    </div>
-
-    <!-- TAB: ANOMALIES -->
-    <div id="tab-anomalies" class="tab-panel" style="display:none; margin-top:8px;">
-      <div class="chart" id="chart-anomalies"></div>
-      <div class="chart" id="chart-interarrival"></div>
-      <div style="height:8px"></div>
-      <div class="chart" id="chart-pareto"></div>
-    </div>
-  </div>
-
-  <!-- PANNELLO DESTRO: sintesi e hotspot -->
-  <aside class="right-column">
-    <div class="card">
-      <h4>Top 8 Fasce orarie (totali)</h4>
-      <div id="top-hours-list" class="small"></div>
-    </div>
-
-    <div class="card">
-      <h4>Top Hotspot (giorno+ora)</h4>
-      <table id="hotspots-small" style="width:100%; font-size:0.9rem;">
-        <thead><tr><th>#</th><th>Data</th><th>Ora</th><th>Clienti</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-
-    <div class="card">
-      <h4>Azioni</h4>
-      <div style="display:flex; gap:8px; margin-top:8px;">
-        <button id="export-overall">Esporta Giornaliere CSV</button>
-        <button id="recompute">Ricalcola</button>
-      </div>
-    </div>
-  </aside>
-</section>
-
-<footer style="margin-top:18px;" class="small">© 2025 Cruscotto Clienti</footer>
-
+<footer class="small" style="margin-top:16px;">© 2025 Cruscotto Clienti</footer>
 <script src="stats.js"></script>
 </body>
 </html>
