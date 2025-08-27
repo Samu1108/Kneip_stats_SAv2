@@ -1,5 +1,5 @@
-const PRICE_ADULTO = 2.77; // valore reale medio
-const PRICE_BAMBINO = 2.00;
+const PRICE_ADULTO = 3;
+const PRICE_BAMBINO = 2;
 const PERMANENZA_MIN = 75;
 const CAPACITA = 60;
 
@@ -136,6 +136,7 @@ function computeOccupancyTimeline(R,bucketMinutes=5){
 function computeKPIs(){
     const totClients = filteredRecords.length;
     const totRevenue = filteredRecords.reduce((s,r)=>s+r.price,0);
+    const avgRevenuePerClient = totClients ? (totRevenue/totClients).toFixed(2) : 0;
     const dailyCounts = aggregatedDaily.map(d=>d.n);
     const avgPerDay = dailyCounts.length ? dailyCounts.reduce((s,x)=>s+x,0)/dailyCounts.length : 0;
 
@@ -153,6 +154,7 @@ function computeKPIs(){
     return {
         totClients,
         totRevenue,
+        avgRevenuePerClient,
         avgPerDay: avgPerDay.toFixed(2),
         peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + toEur(peakDay.revenue) + ")",
         peakCount,
@@ -165,7 +167,7 @@ function computeKPIs(){
 function renderKPIs(){
     const k = computeKPIs();
     document.getElementById("kpi-total").textContent = k.totClients;
-    document.getElementById("kpi-revenue").textContent = toEur(k.totRevenue);
+    document.getElementById("kpi-revenue").textContent = toEur(k.totRevenue) + ` (${k.avgRevenuePerClient} € per cliente)`;
     document.getElementById("kpi-avg").textContent = k.avgPerDay;
     document.getElementById("kpi-peak").textContent = k.peakDay;
     document.getElementById("kpi-saturation").textContent = k.saturation + "%";
@@ -212,8 +214,8 @@ function bindUI(){
     document.getElementById("apply-filters").addEventListener("click",applyFiltersAndRender);
     document.getElementById("reset-filters").addEventListener("click",()=>{
         const dates=[...new Set(rec.map(r=>r.data))].sort();
-        document.getElementById("start-date").value=dates[0];
-        document.getElementById("end-date").value=dates[dates.length-1];
+        document.getElementById("start-date").value = dates[0];
+        document.getElementById("end-date").value = dates[dates.length-1];
         document.getElementById("filter-type").value="all";
         applyFiltersAndRender();
     });
