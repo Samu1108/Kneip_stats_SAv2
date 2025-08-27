@@ -1,19 +1,23 @@
 let clienti = [];
 
-// Carica dati clienti
+// === CARICAMENTO DATI CLIENTI ===
 async function caricaClienti() {
-    const res = await fetch("clienti.json");
-    clienti = await res.json();
-    caricaDate();
-    aggiornaDati();
+    try {
+        const res = await fetch("clienti.json");
+        clienti = await res.json();
+        caricaDate();
+        aggiornaDati();
+    } catch(e) {
+        console.error("Errore nel caricamento clienti:", e);
+    }
 }
 
-// Popola select delle date
+// Popola select date
 function caricaDate() {
     const select = document.getElementById("filter-date");
     select.innerHTML = '<option value="all">Tutte le date</option>';
     const dates = [...new Set(clienti.map(c => c.data).filter(Boolean))].sort();
-    dates.forEach(d => {
+    dates.forEach(d=>{
         const opt = document.createElement("option");
         opt.value = d;
         opt.textContent = d;
@@ -27,30 +31,31 @@ function filtraClienti() {
     const type = document.getElementById("filter-type").value;
 
     let dati = [...clienti];
-    if (date !== "all") dati = dati.filter(c => c.data === date);
+    if(date !== "all") dati = dati.filter(c => c.data === date);
 
     return { dati, type };
 }
 
 // Calcola aggregati per fascia oraria
-function calcolaFasce(dati, type) {
+function calcolaFasce(dati,type) {
     const fasce = {};
-    dati.forEach(c => {
-        let [h, m] = (c.orario || "00:00").split(":").map(Number);
+    dati.forEach(c=>{
+        let [h,m] = (c.orario||"00:00").split(":").map(Number);
         m = m < 30 ? 0 : 30;
         const fascia = `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}`;
-        if (!fasce[fascia]) fasce[fascia] = { Adulti:0, Bambini:0 };
-        if ((c.descrizione || "").toLowerCase().includes("bamb")) fasce[fascia].Bambini++;
+        if(!fasce[fascia]) fasce[fascia] = { Adulti:0, Bambini:0 };
+        if((c.descrizione||"").toLowerCase().includes("bamb")) fasce[fascia].Bambini++;
         else fasce[fascia].Adulti++;
     });
 
     const result = [];
-    let totaleAdulti=0, totaleBambini=0;
+    let totaleAdulti = 0, totaleBambini = 0;
 
-    Object.keys(fasce).sort().forEach(f => {
+    Object.keys(fasce).sort().forEach(f=>{
         const a = fasce[f].Adulti;
         const b = fasce[f].Bambini;
-        totaleAdulti += a; totaleBambini += b;
+        totaleAdulti += a;
+        totaleBambini += b;
 
         result.push({
             "Fascia Oraria": f,
@@ -75,16 +80,17 @@ function calcolaFasce(dati, type) {
     });
 
     // Filtra per tipo
-    if (type==="adulti") return result.map(r=>({
+    if(type==="adulti") return result.map(r=>({
         "Fascia Oraria": r["Fascia Oraria"],
         "Adulti": r["Adulti"],
         "Incasso Adulti": r["Incasso Adulti"]
     }));
-    if (type==="bambini") return result.map(r=>({
+    if(type==="bambini") return result.map(r=>({
         "Fascia Oraria": r["Fascia Oraria"],
         "Bambini": r["Bambini"],
         "Incasso Bambini": r["Incasso Bambini"]
     }));
+
     return result;
 }
 
@@ -106,7 +112,7 @@ function aggiornaTabella(dati) {
         if(r["Fascia Oraria"]==="TOTALE") tr.classList.add("totale");
         Object.values(r).forEach(val=>{
             const td = document.createElement("td");
-            td.textContent = typeof val==="number" && val>=0 && !String(val).includes('.') ? (val+" €") : val;
+            td.textContent = (typeof val==="number" && !String(val).includes('.')) ? val+" €" : val;
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -120,27 +126,34 @@ function aggiornaGrafici(dati) {
     const adulti = filtrati.map(r=>r.Adulti||0);
     const bambini = filtrati.map(r=>r.Bambini||0);
 
-    // Bar
-    Plotly.newPlot("bar-chart", [
-        {x:fasce, y:adulti, type:"bar", name:"Adulti", marker:{color:"#1f77b4"}},
-        {x:fasce, y:bambini, type:"bar", name:"Bambini", marker:{color:"#ff7f0e"}}
-    ], {title:"Clienti per Fascia Oraria", height:500, barmode:"stack"});
+    const heightChart = 500; // Altezza verticale aumentata
 
-    // Pie
+    // Bar Chart
+    Plotly.newPlot("bar-chart", [
+        { x: fasce, y: adulti, type:"bar", name:"Adulti", marker:{color:"#1f77b4"} },
+        { x: fasce, y: bambini, type:"bar", name:"Bambini", marker:{color:"#ff7f0e"} }
+    ], { title:"Clienti per Fascia Oraria", barmode:"stack", height: heightChart });
+
+    // Pie Chart
     const totaleAdulti = adulti.reduce((a,b)=>a+b,0);
     const totaleBambini = bambini.reduce((a,b)=>a+b,0);
-    Plotly.newPlot("pie-chart", [{values:[totaleAdulti,totaleBambini], labels:["Adulti","Bambini"], type:"pie", marker:{colors:["#1f77b4","#ff7f0e"]}}], {title:"Distribuzione Clienti", height:500});
+    Plotly.newPlot("pie-chart", [{
+        values:[totaleAdulti, totaleBambini],
+        labels:["Adulti","Bambini"],
+        type:"pie",
+        marker:{colors:["#1f77b4","#ff7f0e"]}
+    }], { title:"Distribuzione Clienti", height: heightChart });
 
-    // Line
+    // Line Chart
     Plotly.newPlot("line-chart", [
-        {x:fasce, y:adulti, type:"scatter", mode:"lines+markers", name:"Adulti", line:{color:"#1f77b4"}},
-        {x:fasce, y:bambini, type:"scatter", mode:"lines+markers", name:"Bambini", line:{color:"#ff7f0e"}}
-    ], {title:"Andamento Clienti", height:500});
+        { x: fasce, y: adulti, type:"scatter", mode:"lines+markers", name:"Adulti", line:{color:"#1f77b4"} },
+        { x: fasce, y: bambini, type:"scatter", mode:"lines+markers", name:"Bambini", line:{color:"#ff7f0e"} }
+    ], { title:"Andamento Clienti", height: heightChart });
 }
 
-// Aggiorna tutto (cards, tabella, grafici)
+// Aggiorna tutto
 function aggiornaDati() {
-    const {dati, type} = filtraClienti();
+    const { dati, type } = filtraClienti();
     const fasce = calcolaFasce(dati,type);
     aggiornaCards(fasce);
     aggiornaTabella(fasce);
@@ -169,7 +182,6 @@ async function scaricaBackupPDF() {
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-
     doc.setFontSize(16);
     doc.text("Backup Clienti", 105, 20, null, null, "center");
     doc.setFontSize(12);
@@ -178,11 +190,11 @@ async function scaricaBackupPDF() {
     doc.text(`Data download: ${dataOggi}`, 20, 60);
 
     let y = 80;
-    dati.forEach((c, i) => {
-        const spesa = (c.descrizione || "").toLowerCase().includes("bamb") ? 2 : 3;
-        doc.text(`${i + 1}. ${c.id} - ${c.descrizione} - Spesa: €${spesa}`, 20, y);
+    dati.forEach((c,i)=>{
+        const spesa = (c.descrizione||"").toLowerCase().includes("bamb")?2:3;
+        doc.text(`${i+1}. ${c.id} - ${c.descrizione} - Spesa: €${spesa}`, 20, y);
         y += 7;
-        if (y > 270) {
+        if(y>270){
             doc.addPage();
             y = 20;
         }
@@ -191,18 +203,18 @@ async function scaricaBackupPDF() {
     // Firma
     try {
         const img = await fetch('firma.png');
-        if (img.ok) {
+        if(img.ok){
             const blob = await img.blob();
             const reader = new FileReader();
-            reader.onload = function(e) {
-                doc.text(`Molveno (TN), ${dataOggi}`, 20, y + 20);
-                doc.text("Samuele Sartori", 20, y + 30);
-                doc.addImage(e.target.result, 'PNG', 5, y + 35, 60, 20);
+            reader.onload = function(e){
+                doc.text(`Molveno (TN), ${dataOggi}`, 20, y+20);
+                doc.text("Samuele Sartori", 20, y+30);
+                doc.addImage(e.target.result,'PNG',5,y+35,60,20);
                 doc.save(nomeFile);
             };
             reader.readAsDataURL(blob);
         } else doc.save(nomeFile);
-    } catch(e) {
+    } catch(e){
         console.warn("Firma non caricata:", e);
         doc.save(nomeFile);
     }
