@@ -2,7 +2,7 @@ const PRICE_ADULTO = 3, PRICE_BAMBINO = 2, PERMANENZA_MIN = 75, CAPACITA = 60;
 let raw = [], rec = [], aggregatedDaily = [], aggregatedHourly = [], filteredRecords = [];
 
 const pad2 = x => String(x).padStart(2, "0");
-const toEur = n => `${Math.round(n)} €`;
+const toEur = n => `${n.toFixed(2).replace('.', ',')} €`;
 const isChild = s => (s || "").toLowerCase().includes("bamb");
 function toDateObj(dateStr, timeStr) {
     const [Y, M, D] = dateStr.split("-").map(Number);
