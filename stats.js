@@ -59,6 +59,7 @@ function applyFiltersAndRender(){
     const startDate = f.start ? new Date(f.start) : null;
     const endDate = f.end ? new Date(f.end) : null;
 
+    // Filtra i record
     filteredRecords = rec.filter(r=>{
         const dt = r.dt;
         const inDate = (!startDate || dt >= startDate) && (!endDate || dt <= endDate);
@@ -122,6 +123,23 @@ function aggregateHourlySummary(hourlyByDay){
     return summary;
 }
 
+/* OCCUPANCY */
+function computeOccupancyTimeline(R,bucketMinutes=5){
+    const buckets = new Map();
+    for(const rec of R){
+        const start = rec.dt.getTime();
+        const end = start + PERMANENZA_MIN*60*1000;
+        for(let t=start; t<end; t+=bucketMinutes*60*1000){
+            const dt = new Date(t);
+            const key = `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())} ${pad2(dt.getHours())}:${pad2(Math.floor(dt.getMinutes()/bucketMinutes)*bucketMinutes)}`;
+            buckets.set(key,(buckets.get(key)||0)+1);
+        }
+    }
+    const keys=[...buckets.keys()].sort();
+    const counts = keys.map(k=>buckets.get(k));
+    return {keys,counts,buckets};
+}
+
 /* KPI */
 function computeKPIs(){
     const totClients = filteredRecords.length;
@@ -130,15 +148,19 @@ function computeKPIs(){
     const dailyCounts = aggregatedDaily.map(d=>d.n);
     const avgPerDay = dailyCounts.length ? (dailyCounts.reduce((s,x)=>s+x,0)/dailyCounts.length).toFixed(2) : "0.00";
 
-    // Picco basato su clienti filtrati
-    const peakDay = aggregatedDaily.reduce((max,d)=>d.n>max.n?d:max,{n:0,revenue:0,date:"-"});
+    const peakHourObj = aggregatedHourly.summary.reduce((max,h)=>h.totalArrivals>max.totalArrivals?h:max,{hour:-1,totalArrivals:0});
+    const saturation = CAPACITA>0 ? Math.round((peakHourObj.totalArrivals/CAPACITA)*100) : 0;
+    const preds = aggregatedHourly.summary.map(h=>h.totalArrivals/dailyCounts.length||0);
+    const predStr = preds.map((v,i)=>`${pad2(i+9)}:00→${Math.round(v)}`).join(", ");
 
     return {
         totClients,
         totRevenue,
         avgRevenuePerClient,
         avgPerDay,
-        peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + peakDay.revenue.toFixed(2) + " €)"
+        peakDay: peakHourObj.hour>=0 ? pad2(peakHourObj.hour)+":00 ("+peakHourObj.totalArrivals+" clienti)" : "-",
+        saturation,
+        predStr
     };
 }
 
@@ -150,19 +172,105 @@ function renderKPIs(){
     document.getElementById("kpi-revenue-per-client").textContent = toEur(Number(k.avgRevenuePerClient));
     document.getElementById("kpi-avg").textContent = k.avgPerDay;
     document.getElementById("kpi-peak").textContent = k.peakDay;
+    document.getElementById("kpi-saturation").textContent = k.saturation + "%";
+    document.getElementById("kpi-predict").textContent = k.predStr;
 }
 
-/* RENDER TAB, OCCUPANCY, TREND ... */
-function renderHourlyTable(){/* simile alla versione precedente */}
-function renderOccupancy(){/* simile */}
-function renderTrend(){/* simile */}
+function renderHourlyTable(){
+    const tbody = document.querySelector("#hourly-table tbody");
+    tbody.innerHTML = "";
+    aggregatedHourly.summary.forEach(h=>{
+        const pred = Math.round(h.totalArrivals/aggregatedDaily.length||0);
+        const tr = document.createElement("tr");
+        tr.innerHTML=`<td>${pad2(h.hour)}:00</td><td>${h.totalAdulti}</td><td>${h.totalBamb}</td>
+        <td>${h.totalArrivals}</td><td>${toEur(h.totalRev)}</td><td>${pred}</td>`;
+        tbody.appendChild(tr);
+    });
+    const top = aggregatedHourly.summary.sort((a,b)=>b.totalArrivals-a.totalArrivals).slice(0,8)
+        .map((r,i)=>`${i+1}. ${pad2(r.hour)}:00 — ${r.totalArrivals}`).join("<br/>");
+    document.getElementById("top-hours-list").innerHTML = top;
+}
+
+function renderOccupancy(){
+    const occ = computeOccupancyTimeline(filteredRecords,5);
+    Plotly.newPlot("chart-occupancy",[{
+        x:occ.keys,
+        y:occ.counts,
+        type:"scatter",
+        mode:"lines",
+        name:"Occupazione stimata",
+        line:{shape:"spline"}
+    }],{
+        title:"Occupazione stimata 9-17",
+        shapes:[{type:"line",x0:occ.keys[0],x1:occ.keys[occ.keys.length-1],y0:CAPACITA,y1:CAPACITA,line:{color:'red',dash:'dash'}}],
+        yaxis:{range:[0,Math.max(CAPACITA,Math.max(...occ.counts))+5]}
+    });
+}
+
+function renderTrend(){
+    const x = aggregatedDaily.map(d=>d.date);
+    const y = aggregatedDaily.map(d=>d.n);
+    Plotly.newPlot("chart-trend-daily",[{
+        x,y,type:"scatter",mode:"lines+markers",name:"Clienti/giorno"
+    }],{title:"Andamento giornaliero"});
+}
+
+/* UI BIND */
+function bindUI(){
+    document.getElementById("apply-filters").addEventListener("click",applyFiltersAndRender);
+    document.getElementById("reset-filters").addEventListener("click",()=>{
+        const dates=[...new Set(rec.map(r=>r.data))].sort();
+        document.getElementById("start-date").value = dates[0];
+        document.getElementById("end-date").value = dates[dates.length-1];
+        document.getElementById("filter-type").value="all";
+        applyFiltersAndRender();
+    });
+    document.getElementById("recompute").addEventListener("click",applyFiltersAndRender);
+    document.getElementById("export-hourly").addEventListener("click",()=>exportCSV("hourly"));
+    document.getElementById("export-daily").addEventListener("click",()=>exportCSV("daily"));
+    document.querySelectorAll(".tab-btn").forEach(btn=>btn.addEventListener("click",()=>{
+        document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+        document.querySelectorAll(".tab-panel").forEach(p=>p.style.display="none");
+        document.getElementById("tab-"+btn.dataset.tab).style.display="";
+    }));
+}
+
+/* EXPORT CSV */
+function exportCSV(type){
+    let body="";
+    if(type==="hourly"){
+        const header=["Ora","Adulti","Bambini","Totale","Incasso (€)","Previsti"];
+        const rows = aggregatedHourly.summary.map(h=>[
+            pad2(h.hour)+":00",h.totalAdulti,h.totalBamb,h.totalArrivals,h.totalRev.toFixed(2),Math.round(h.totalArrivals/aggregatedDaily.length||0)
+        ]);
+        body = [header.join(","),...rows.map(r=>r.join(","))].join("\n");
+        download("hourly.csv",body);
+    } else {
+        const header=["Data","Clienti","Adulti","Bambini","Incasso (€)"];
+        const rows = aggregatedDaily.map(d=>[
+            d.date,d.n,d.adulti,d.bambini,d.revenue.toFixed(2)
+        ]);
+        body = [header.join(","),...rows.map(r=>r.join(","))].join("\n");
+        download("daily.csv",body);
+    }
+}
+
+function download(filename,text){
+    const blob = new Blob([text],{type:'text/csv;charset=utf-8;'});
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download',filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
 function renderAll(){
     renderKPIs();
     renderHourlyTable();
     renderOccupancy();
     renderTrend();
 }
-
-function bindUI(){/* simile alla versione precedente */}
 
 document.addEventListener("DOMContentLoaded",()=>{loadData();});
