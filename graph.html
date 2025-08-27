@@ -3,54 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Grafici Clienti</title>
+<title>Cruscotto Clienti</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<style>
-  .chart { min-height: 500px; }
-</style>
 </head>
 <body>
-
-<header style="display:flex; justify-content:space-between; align-items:center; padding:0 16px; height:200px; border-bottom:2px solid #ccc;">
-  <h1 style="margin:0; flex:1; text-align:center;">📊 Cruscotto Grafici Clienti</h1>
-  <div class="nav-buttons" style="display:flex; gap:10px;">
-    <a href="index.html"><button>Home</button></a>
-    <a href="stats.html"><button>Stats</button></a>
-    <a href="graph.html"><button>Graphs</button></a>
-  </div>
+<header>
+    <h1>Cruscotto Analisi Clienti</h1>
+    <p>Monitoraggio in tempo reale e statistiche dettagliate</p>
+    <div class="nav-buttons" style="display:flex; gap:10px;">
+        <a href="index.html"><button>Home</button></a>
+        <a href="stats.html"><button>Stats</button></a>
+        <a href="graph.html"><button>Graphs</button></a>
+    </div>
 </header>
 
-<main style="margin-top:20px;">
-  <section class="charts" style="display:flex; flex-direction:column; gap:20px; margin-top:20px;">
+<main>
+<section class="charts">
     <div class="card">
-      <h3>📊 Clienti per Orario</h3>
-      <div id="chart-clienti-orario" class="chart"></div>
+        <h3>📊 Clienti per Orario</h3>
+        <div id="chart-clienti-orario" class="chart"></div>
     </div>
 
     <div class="card">
-      <h3>📈 Incassi per Orario</h3>
-      <div id="chart-incassi-orario" class="chart"></div>
+        <h3>📈 Incassi per Orario</h3>
+        <div id="chart-incassi-orario" class="chart"></div>
     </div>
 
     <div class="card">
-      <h3>🥧 Distribuzione Totale Adulti vs Bambini</h3>
-      <div id="chart-pie" class="chart"></div>
+        <h3>🥧 Distribuzione Totale Adulti vs Bambini</h3>
+        <div id="chart-pie" class="chart"></div>
     </div>
 
     <div class="card">
-      <h3>📉 Andamento Clienti Adulti e Bambini</h3>
-      <div id="chart-linea" class="chart"></div>
+        <h3>📉 Andamento Clienti Adulti e Bambini</h3>
+        <div id="chart-linea" class="chart"></div>
     </div>
 
     <div class="card">
-      <h3>🌡️ Heatmap Orari vs Tipo Cliente</h3>
-      <div id="chart-heatmap" class="chart"></div>
+        <h3>🌡️ Heatmap Orari vs Tipo Cliente</h3>
+        <div id="chart-heatmap" class="chart"></div>
     </div>
-  </section>
+</section>
 </main>
 
-<footer class="small" style="margin-top:16px;">© 2025 Cruscotto Clienti</footer>
+<footer>
+    <p>© 2025 Cruscotto Clienti - Tutti i diritti riservati</p>
+</footer>
+
 <script src="graph.js"></script>
 </body>
 </html>
