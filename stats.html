@@ -27,19 +27,19 @@ tr.totale{font-weight:700;background:#f1f3f5;}
 .small{font-size:0.85rem;color:#555;}
 .tabs{display:flex;gap:8px;margin-bottom:8px;}
 .tabs button.active{background:#2563eb;color:#fff;border-color:#2563eb;}
-.tab-panel{display:none;}
-.tab-panel.active{display:block;}
 </style>
 </head>
 
 <body>
-<header>
-<h1>📊 Statistiche Avanzate - Clienti</h1>
-<div style="display:flex; gap:8px;">
-<a href="index.html"><button>Home</button></a>
-<a href="stats.html"><button>Stats</button></a>
-</div>
+<header style="display:flex; justify-content:space-between; align-items:center; padding:0 16px; height:200px; border-bottom:2px solid #ccc;">
+    <h1 style="margin:0; flex:1; text-align:center;">📊 Statistiche Avanzate - Clienti</h1>
+    <div class="nav-buttons" style="display:flex; gap:10px;">
+        <a href="index.html"><button id="btn-home">Home</button></a>
+        <a href="stats.html"><button id="btn-stats">Stats</button></a>
+    </div>
 </header>
+
+
 
 <section class="filters">
 <label class="small">Da <input type="date" id="start-date"></label>
@@ -53,19 +53,21 @@ tr.totale{font-weight:700;background:#f1f3f5;}
 <button id="apply-filters">Applica</button>
 <button id="reset-filters">Reset</button>
 <button id="export-hourly">Esporta Oraria CSV</button>
-<button id="export-daily">Esporta Giornaliera CSV</button>
-<button id="recompute">Ricalcola</button>
 </section>
 
-<section class="kpis">
-<div class="card"><h4>Clienti totali</h4><p id="kpi-total">0</p></div>
-<div class="card"><h4>Incasso totale</h4><p id="kpi-revenue">0 €</p></div>
-<div class="card"><h4>Incasso per cliente</h4><p id="kpi-revenue-per-client">0 €</p></div>
-<div class="card"><h4>Media clienti/giorno</h4><p id="kpi-avg">0</p></div>
-<div class="card"><h4>Saturazione max</h4><p id="kpi-saturation">0%</p></div>
-<div class="card"><h4>Ora di picco stimata</h4><p id="kpi-peak">-</p></div>
-<div class="card"><h4>Previsti client/h</h4><p id="kpi-predict">-</p></div>
+<section class="stats-advanced">
+    <div class="card"><h3>Incasso Medio Cliente</h3><p id="stat-incasso-medio">0 €</p></div>
+    <div class="card"><h3>Incasso Totale</h3><p id="stat-totale-incasso">0 €</p></div>
+    <div class="card"><h3>Totale Adulti</h3><p id="stat-adulti">0</p></div>
+    <div class="card"><h3>Totale Bambini</h3><p id="stat-bambini">0</p></div>
+    <div class="card"><h3>Giorno con più Clienti</h3><p id="stat-max-clienti-giorno">-</p></div>
+    <div class="card"><h3>Giorno con più Incasso</h3><p id="stat-max-incasso-giorno">-</p></div>
+    <div class="card"><h3>Media Clienti/Giorno</h3><p id="stat-media-clienti-giorno">-</p></div>
+    <div class="card"><h3>Orario più frequentato</h3><p id="stat-orario-top">-</p></div>
+    <div class="card"><h3>Giorno della settimana migliore</h3><p id="stat-best-weekday">-</p></div>
+    <div class="card"><h3>Top 3 Giorni per Incasso</h3><ul id="stat-top3"></ul></div>
 </section>
+
 
 <div class="main">
 <div>
@@ -75,28 +77,43 @@ tr.totale{font-weight:700;background:#f1f3f5;}
 <button class="tab-btn" data-tab="trend">Trend</button>
 </div>
 
-<div id="tab-per-hour" class="tab-panel active">
+<div id="tab-per-hour" class="tab-panel">
 <div class="table-container">
 <table id="hourly-table">
 <thead>
 <tr>
-<th>Ora</th><th>Adulti</th><th>Bambini</th><th>Totale</th><th>Incasso (€)</th><th>Previsti</th>
+<th data-col="hour">Ora</th><th data-col="adulti">Adulti</th><th data-col="bambini">Bambini</th>
+<th data-col="totale">Totale</th><th data-col="incasso">Incasso (€)</th>
+<th data-col="predicted">Previsti</th>
 </tr>
 </thead>
 <tbody></tbody>
 </table>
 </div>
-<div class="card"><h4>Top fasce orarie</h4><div id="top-hours-list" class="small"></div></div>
 </div>
 
-<div id="tab-occupancy" class="tab-panel">
+<div id="tab-occupancy" class="tab-panel" style="display:none;">
 <div class="chart" id="chart-occupancy"></div>
 </div>
 
-<div id="tab-trend" class="tab-panel">
+<div id="tab-trend" class="tab-panel" style="display:none;">
 <div class="chart" id="chart-trend-daily"></div>
 </div>
 </div>
+
+<aside class="right-panel">
+<div class="card">
+<h4>Top fasce orarie</h4>
+<div id="top-hours-list" class="small"></div>
+</div>
+<div class="card">
+<h4>Azioni</h4>
+<div style="display:flex;gap:8px;margin-top:8px;">
+<button id="export-daily">Esporta Giornaliera CSV</button>
+<button id="recompute">Ricalcola</button>
+</div>
+</div>
+</aside>
 </div>
 
 <footer class="small" style="margin-top:16px;">© 2025 Cruscotto Clienti</footer>
