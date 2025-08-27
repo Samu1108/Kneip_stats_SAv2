@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grafici Clienti</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+
+<header style="display:flex; justify-content:space-between; align-items:center; padding:0 16px; height:200px; border-bottom:2px solid #ccc;">
+  <h1 style="margin:0; flex:1; text-align:center;">📊 Cruscotto Grafici Clienti</h1>
+  <div class="nav-buttons" style="display:flex; gap:10px;">
+    <a href="index.html"><button>Home</button></a>
+    <a href="stats.html"><button>Stats</button></a>
+    <a href="graph.html"><button>Graphs</button></a>
+  </div>
+</header>
+
+<main style="margin-top:20px;">
+  <!-- Tabella Completa -->
+  <section>
+    <div class="card">
+      <h3>Tabella Completa Dati Clienti</h3>
+      <div class="table-container">
+        <table id="full-table"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Grafici -->
+  <section class="charts">
+    <div class="card">
+      <h3>📊 Clienti per Giorno</h3>
+      <div id="chart-clienti-giorno" class="chart"></div>
+    </div>
+
+    <div class="card">
+      <h3>📈 Andamento Incassi</h3>
+      <div id="chart-incassi" class="chart"></div>
+    </div>
+
+    <div class="card">
+      <h3>🥧 Distribuzione Adulti vs Bambini</h3>
+      <div id="chart-pie" class="chart"></div>
+    </div>
+
+    <div class="card">
+      <h3>📉 Clienti per Giorno (Adulti + Bambini)</h3>
+      <div id="chart-stacked" class="chart"></div>
+    </div>
+
+    <div class="card">
+      <h3>🌡️ Heatmap Giorno della Settimana vs Orario</h3>
+      <div id="chart-heatmap" class="chart"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="small" style="margin-top:16px;">© 2025 Cruscotto Clienti</footer>
+<script src="graph.js"></script>
+</body>
+</html>
