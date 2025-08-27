@@ -162,30 +162,43 @@ function computeKPIs(){
 }
 
 /* RENDER */
-function renderKPIs(){
-    const k = computeKPIs();
+function computeKPIs(){
+    const totClients = filteredRecords.length;
 
-    // Clienti totali
-    document.getElementById("kpi-total").textContent = k.totClients;
+    // Totale incasso (somma dei prezzi reali per cliente)
+    const totRevenue = filteredRecords.reduce((s,r)=>s + r.price, 0);
 
-    // Incasso totale (somma intera)
-    document.getElementById("kpi-revenue").textContent = k.totRevenue + " €";
-
-    // Incasso medio per cliente (decimali solo qui)
-    document.getElementById("kpi-revenue-per-client").textContent = parseFloat(k.avgRevenuePerClient).toFixed(2) + " €";
+    // Incasso medio per cliente
+    const avgRevenuePerClient = totClients ? (totRevenue / totClients) : 0;
 
     // Media clienti/giorno
-    document.getElementById("kpi-avg").textContent = k.avgPerDay;
+    const dailyCounts = aggregatedDaily.map(d=>d.n);
+    const avgPerDay = dailyCounts.length ? (dailyCounts.reduce((s,x)=>s+x,0)/dailyCounts.length) : 0;
 
     // Giorno di picco
-    document.getElementById("kpi-peak").textContent = k.peakDay;
+    const peakDay = aggregatedDaily.reduce((max,d)=>d.n>max.n?d:max,{n:0,revenue:0,date:"-"});
 
-    // Saturazione massima
-    document.getElementById("kpi-saturation").textContent = k.saturation + "%";
+    // Occupancy
+    const occ = computeOccupancyTimeline(filteredRecords,5);
+    const peakCount = occ.counts.length ? Math.max(...occ.counts) : 0;
+    const saturation = CAPACITA>0 ? (peakCount/CAPACITA*100) : 0;
 
-    // Previsioni clienti/ora
-    document.getElementById("kpi-predict").textContent = k.predStr;
+    // Previsioni semplici per ogni ora
+    const preds = aggregatedHourly.summary.map(h=>h.totalArrivals / dailyCounts.length || 0);
+    const predStr = preds.map((v,i)=>`${pad2(i+9)}:00→${Math.round(v)}`).join(", ");
+
+    return {
+        totClients,
+        totRevenue,
+        avgRevenuePerClient: avgRevenuePerClient.toFixed(2),
+        avgPerDay: avgPerDay.toFixed(2),
+        peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + peakDay.revenue + " €)",
+        peakCount,
+        saturation: Math.round(saturation),
+        predStr
+    };
 }
+
 
 
 function renderHourlyTable(){
