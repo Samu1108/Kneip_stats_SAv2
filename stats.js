@@ -1,408 +1,530 @@
-/* ======== CONFIG ======== */
+/* stats.js
+   Richiede clienti.json nella stessa cartella.
+   Permanenza fissa = 75 min, capienza = 60 (puoi cambiare le costanti qui sotto)
+*/
+
 const PRICE_ADULTO = 3;
 const PRICE_BAMBINO = 2;
+const PERMANENZA_MIN = 75; // 1h15
+const CAPACITA = 60;
 
-/* ======== STATE ======== */
-let raw = [];        // records crudi
-let records = [];    // records normalizzati (Date, flag, ecc.)
-let daily = [];      // aggregati giornalieri (dopo filtro)
-let filters = { start: null, end: null, tipo: 'all', rollWindow: 7 };
+// stato
+let raw = [];
+let rec = []; // records normalizzati
+let aggregatedDaily = [];
+let aggregatedHourly = []; // per ora 0..23
+let filteredRecords = [];
 
-/* ======== UTILS ======== */
-const fmtInt = n => (isFinite(n) ? Math.round(n) : 0);
-const fmtEur = n => (isFinite(n) ? `${fmtInt(n)} €` : "0 €");
-const pct = (a,b) => b>0 ? (100*a/b) : 0;
-const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-const itWeekday = d => ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"][d]; // 0=Dom
-const pad2 = x => String(x).padStart(2,'0');
-const parseIsChild = s => (s||"").toLowerCase().includes("bamb");
+// utilità
+const pad2 = x => String(x).padStart(2, '0');
+const toEur = n => `${Math.round(n)} €`;
+const isChild = s => (s||"").toLowerCase().includes("bamb");
 
-/* Rolling average semplice */
-function rolling(arr, w) {
-  if (w <= 1) return arr.slice();
+// parse date/time safely (treating as local dates but use consistent buckets)
+function toDateObj(dateStr, timeStr){
+  // assume dateStr "YYYY-MM-DD", timeStr "HH:MM"
+  const [Y,M,D] = (dateStr||"1970-01-01").split("-").map(Number);
+  const [h,m] = (timeStr||"00:00").split(":").map(Number);
+  // Use local Date constructor but zero seconds
+  return new Date(Y, (M||1)-1, D||1, h||0, m||0, 0);
+}
+
+// fetch + normalize
+async function loadData(){
+  try {
+    const res = await fetch("clienti.json");
+    raw = await res.json();
+  } catch (e) {
+    console.error("Errore caricamento clienti.json", e);
+    alert("Impossibile caricare clienti.json (controlla percorso / server).");
+    return;
+  }
+  rec = raw.map((r, idx) => {
+    const child = isChild(r.descrizione);
+    const dt = toDateObj(r.data, r.orario);
+    const hour = (r.orario || "00:00").split(":")[0] || "00";
+    const minute = (r.orario || "00:00").split(":")[1] || "00";
+    return {
+      idx, id: r.id ?? (idx+1),
+      data: r.data,
+      orario: r.orario || "00:00",
+      dt,
+      hour: Number(hour),
+      minute: Number(minute),
+      bucketHalf: `${pad2(hour)}:${Number(minute) < 30 ? "00" : "30"}`,
+      isChild: child,
+      price: child ? PRICE_BAMBINO : PRICE_ADULTO
+    };
+  }).filter(r => r.data); // scarta senza data
+
+  // set default date range UI
+  const dates = [...new Set(rec.map(r => r.data))].sort();
+  if (dates.length){
+    document.getElementById("start-date").value = dates[0];
+    document.getElementById("end-date").value = dates[dates.length-1];
+  }
+
+  // inizializza eventi UI
+  bindUI();
+
+  // prima render
+  applyFiltersAndRender();
+}
+
+/* ====== FILTRI ====== */
+function getFilters(){
+  const s = document.getElementById("start-date").value || null;
+  const e = document.getElementById("end-date").value || null;
+  const t = document.getElementById("filter-type").value || "all";
+  const roll = Math.max(1, parseInt(document.getElementById("roll-window").value||"7",10));
+  return { start: s, end: e, tipo: t, rollWindow: roll };
+}
+
+function applyFiltersAndRender(){
+  const f = getFilters();
+  filteredRecords = rec.filter(r => {
+    if (f.start && r.data < f.start) return false;
+    if (f.end && r.data > f.end) return false;
+    if (f.tipo === "adulti" && r.isChild) return false;
+    if (f.tipo === "bambini" && !r.isChild) return false;
+    return true;
+  }).sort((a,b)=> a.dt - b.dt);
+
+  // ri-aggregazioni
+  aggregatedDaily = aggregateDaily(filteredRecords);
+  aggregatedHourly = aggregateHourlyByDay(filteredRecords); // object mapping day->hour->counts
+  aggregatedHourly.summary = aggregateHourlySummary(aggregatedHourly); // summary per hour across days (totale, max, min, adulti/bambini/incasso)
+  renderAll();
+}
+
+/* ====== AGGREGAZIONI ====== */
+
+// daily totals
+function aggregateDaily(R){
+  const map = new Map();
+  for (const r of R){
+    if (!map.has(r.data)) map.set(r.data, { date: r.data, n:0, adulti:0, bambini:0, revenue:0 });
+    const d = map.get(r.data);
+    d.n += 1;
+    if (r.isChild) d.bambini += 1; else d.adulti += 1;
+    d.revenue += r.price;
+  }
+  return [...map.values()].sort((a,b)=> a.date.localeCompare(b.date));
+}
+
+// build per-day-hour matrix: object { dates:[], matrix: { date -> [hour objects] } }
+function aggregateHourlyByDay(R){
+  const dates = [...new Set(R.map(r=>r.data))].sort();
+  const matrix = {};
+  for (const d of dates){
+    // initialize hours 0..23
+    matrix[d] = Array.from({length:24}, (_,h)=>({ hour:h, adulti:0, bambini:0, totale:0, revenue:0 }));
+  }
+  for (const r of R){
+    const row = matrix[r.data][r.hour];
+    if (r.isChild) row.bambini += 1; else row.adulti += 1;
+    row.totale += 1;
+    row.revenue += r.price;
+  }
+  return { dates, matrix };
+}
+
+// summary per hour across dates: totals, max per-day, min per-day
+function aggregateHourlySummary(hourlyByDay){
+  const summary = [];
+  const dates = hourlyByDay.dates;
+  for (let h=0; h<24; h++){
+    // per-day values
+    const perDayTotals = dates.map(d => hourlyByDay.matrix[d][h].totale);
+    const perDayAdulti = dates.map(d => hourlyByDay.matrix[d][h].adulti);
+    const perDayBamb  = dates.map(d => hourlyByDay.matrix[d][h].bambini);
+    const perDayRev   = dates.map(d => hourlyByDay.matrix[d][h].revenue);
+
+    const totalArrivals = perDayTotals.reduce((s,v)=>s+v,0);
+    const totalAdulti = perDayAdulti.reduce((s,v)=>s+v,0);
+    const totalBamb = perDayBamb.reduce((s,v)=>s+v,0);
+    const totalRev = perDayRev.reduce((s,v)=>s+v,0);
+
+    const maxArrivals = perDayTotals.length ? Math.max(...perDayTotals) : 0;
+    const minArrivals = perDayTotals.length ? Math.min(...perDayTotals) : 0;
+    const maxAdulti = perDayAdulti.length ? Math.max(...perDayAdulti) : 0;
+    const minAdulti = perDayAdulti.length ? Math.min(...perDayAdulti) : 0;
+    const maxBamb = perDayBamb.length ? Math.max(...perDayBamb) : 0;
+    const minBamb = perDayBamb.length ? Math.min(...perDayBamb) : 0;
+    const maxRev = perDayRev.length ? Math.max(...perDayRev) : 0;
+    const minRev = perDayRev.length ? Math.min(...perDayRev) : 0;
+
+    summary.push({
+      hour: h,
+      totalArrivals,
+      totalAdulti,
+      totalBamb,
+      totalRev,
+      maxArrivals,
+      minArrivals,
+      maxAdulti,
+      minAdulti,
+      maxBamb,
+      minBamb,
+      maxRev,
+      minRev
+    });
+  }
+  return summary;
+}
+
+/* ====== OCCUPANCY (stima usando permanenza) ======
+   Idea: per ogni record consideriamo [start, end=start+PERMANENZA_MIN)
+   registriamo presenza in bucket ogni 5 minuti (o 15) e sommiamo.
+*/
+function computeOccupancyTimeline(R, bucketMinutes = 5){
+  const buckets = new Map(); // key "YYYY-MM-DDTHH:MM" -> count
+  for (const rec of R){
+    const start = rec.dt.getTime();
+    const end = start + PERMANENZA_MIN * 60 * 1000;
+    // iterate per bucket
+    for (let t = start; t < end; t += bucketMinutes * 60 * 1000){
+      const dt = new Date(t);
+      // normalize to string key: date + hh:mm (local)
+      const key = `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())} ${pad2(dt.getHours())}:${pad2(Math.floor(dt.getMinutes()/bucketMinutes)*bucketMinutes)}`;
+      buckets.set(key, (buckets.get(key) || 0) + 1);
+    }
+  }
+  // sorted arrays
+  const keys = [...buckets.keys()].sort();
+  const counts = keys.map(k => buckets.get(k));
+  return { keys, counts, buckets };
+}
+
+/* ====== KPI UTILI ====== */
+function computeKPIs(){
+  const totClients = filteredRecords.length;
+  const totRevenue = filteredRecords.reduce((s,r)=>s+r.price,0);
+  const dailyCounts = aggregatedDaily.map(d=>d.n);
+  const avgPerDay = dailyCounts.length ? (dailyCounts.reduce((s,x)=>s+x,0) / dailyCounts.length) : 0;
+
+  // interarrival median
+  const inter = [];
+  for (let i=1;i<filteredRecords.length;i++){
+    const diffMin = Math.round((filteredRecords[i].dt - filteredRecords[i-1].dt) / 60000);
+    inter.push(Math.max(0,diffMin));
+  }
+  inter.sort((a,b)=>a-b);
+  const medianInter = inter.length ? inter[Math.floor(inter.length/2)] : 0;
+
+  // occupancy timeline and peak saturation
+  const occ = computeOccupancyTimeline(filteredRecords, 5);
+  const peakCount = occ.counts.length ? Math.max(...occ.counts) : 0;
+  const peakKey = occ.keys[occ.counts.indexOf(peakCount)] || "-";
+  const saturation = CAPACITA>0 ? (peakCount / CAPACITA * 100) : 0;
+
+  return {
+    totClients, totRevenue, avgPerDay: avgPerDay.toFixed(2),
+    medianInter, peakCount, peakKey, saturation: saturation.toFixed(1)
+  };
+}
+
+/* ====== RENDERING ====== */
+
+function renderKPIs(){
+  const k = computeKPIs();
+  document.getElementById("kpi-total").textContent = k.totClients;
+  document.getElementById("kpi-revenue").textContent = toEur(k.totRevenue);
+  document.getElementById("kpi-avg").textContent = k.avgPerDay;
+  document.getElementById("kpi-med-inter").textContent = k.medianInter + " min";
+  document.getElementById("kpi-peak").textContent = k.peakKey + " (" + k.peakCount + ")";
+  document.getElementById("kpi-saturation").textContent = k.saturation + "%";
+}
+
+function renderTrendAndDow(){
+  // Trend giornaliero
+  const x = aggregatedDaily.map(d=>d.date);
+  const y = aggregatedDaily.map(d=>d.n);
+  const roll = Number(document.getElementById("roll-window").value || 7);
+  const yRoll = movingAverage(y, roll);
+
+  Plotly.newPlot("chart-trend-daily", [
+    { x, y, type:"scatter", mode:"lines+markers", name:"Clienti/giorno" },
+    { x, y:yRoll, type:"scatter", mode:"lines", name:`Media mobile ${roll}g` }
+  ], { title:"Andamento giornaliero" });
+
+  // Dow distribution
+  const dowMap = {};
+  for (const d of aggregatedDaily){
+    const dow = new Date(d.date).getDay(); // 0=dom
+    const label = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"][dow];
+    dowMap[label] = (dowMap[label]||0) + d.n;
+  }
+  const dowX = Object.keys(dowMap);
+  const dowY = Object.values(dowMap);
+  Plotly.newPlot("chart-dow", [{ x:dowX, y:dowY, type:"bar" }], { title:"Distribuzione per giorno della settimana" });
+
+  // Stack area adulti vs bambini
+  const dates = aggregatedDaily.map(d=>d.date);
+  const adulti = aggregatedDaily.map(d=>d.adulti);
+  const bambini = aggregatedDaily.map(d=>d.bambini);
+  Plotly.newPlot("chart-stack-type", [
+    { x:dates, y:adulti, type:"scatter", mode:"lines", name:"Adulti", stackgroup:"one" },
+    { x:dates, y:bambini, type:"scatter", mode:"lines", name:"Bambini", stackgroup:"one" }
+  ], { title:"Composizione Adulti / Bambini nel tempo" });
+}
+
+/* moving average (null for initial days to keep alignment) */
+function movingAverage(arr, window){
+  if (window <= 1) return arr.slice();
   const out = [];
   let sum = 0;
   for (let i=0;i<arr.length;i++){
     sum += arr[i];
-    if (i>=w) sum -= arr[i-w];
-    out.push(i>=w-1 ? sum/w : null);
+    if (i >= window) sum -= arr[i-window];
+    out.push(i >= window-1 ? +(sum/window).toFixed(2) : null);
   }
   return out;
 }
 
-/* Percentile (tipo nearest-rank) */
-function percentile(arr, p) {
-  if (!arr.length) return 0;
-  const a = [...arr].sort((x,y)=>x-y);
-  const idx = Math.ceil((p/100)*a.length)-1;
-  return a[clamp(idx,0,a.length-1)];
-}
+/* TABLE ORARIA: Totale / Max / Min */
+function renderHourlyTable(){
+  const metric = document.getElementById("hour-metric").value; // total / max / min
+  const sortOpt = document.getElementById("hour-sort").value;
 
-/* Z-score su vettore (ritorna array di z) */
-function zscores(arr){
-  const n = arr.length;
-  if (!n) return [];
-  const m = arr.reduce((s,x)=>s+x,0)/n;
-  const v = arr.reduce((s,x)=>s+(x-m)*(x-m),0)/n;
-  const sd = Math.sqrt(v)||1;
-  return arr.map(x => (x-m)/sd);
-}
-
-/* Costruisce un oggetto Date da "YYYY-MM-DD" e "HH:MM" (UTC-like per coerenza) */
-function makeDate(dateStr, timeStr){
-  const [Y,M,D] = (dateStr||"1970-01-01").split("-").map(Number);
-  const [h,m]   = (timeStr||"00:00").split(":").map(Number);
-  // month index 0-based
-  return new Date(Date.UTC(Y, (M||1)-1, D||1, h||0, m||0, 0));
-}
-
-/* Scarica testo come file */
-function download(filename, text){
-  const blob = new Blob([text], {type:"text/csv;charset=utf-8;"});
-  const url  = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-/* ======== LOAD & PREP ======== */
-async function loadData(){
-  const res = await fetch("clienti.json");
-  raw = await res.json();
-
-  // Normalizza
-  records = raw.map((c, i) => {
-    const isChild = parseIsChild(c.descrizione);
-    const dt = makeDate(c.data, c.orario);
-    const hour = Number((c.orario||"00:00").split(":")[0]||0);
-    const halfHour = Number((c.orario||"00:00").split(":")[1]||0) < 30 ? 0 : 30;
-    const bucket = `${pad2(hour)}:${pad2(halfHour)}`;
-    const euro = isChild ? PRICE_BAMBINO : PRICE_ADULTO;
+  const summary = aggregatedHourly.summary || [];
+  const rows = summary.map(s => {
+    let adulti, bambini, totale, incasso;
+    if (metric === "total"){
+      adulti = s.totalAdulti;
+      bambini = s.totalBamb;
+      totale = s.totalArrivals;
+      incasso = s.totalRev;
+    } else if (metric === "max"){
+      adulti = s.maxAdulti;
+      bambini = s.maxBamb;
+      totale = s.maxArrivals;
+      incasso = s.maxRev;
+    } else { // min
+      adulti = s.minAdulti;
+      bambini = s.minBamb;
+      totale = s.minArrivals;
+      incasso = s.minRev;
+    }
     return {
-      idx: i,
-      id: c.id ?? i+1,
-      dateStr: c.data,
-      timeStr: c.orario || "00:00",
-      dt,
-      weekday: dt.getUTCDay(), // 0=Dom
-      hour,
-      bucket,
-      isChild,
-      euro
+      hour: s.hour,
+      adulti, bambini, totale, incasso
     };
-  }).filter(r => r.dateStr); // tiene solo quelli con data valida
-
-  // Pre-popola date UI
-  const dates = [...new Set(records.map(r=>r.dateStr))].sort();
-  if (dates.length){
-    document.getElementById("start-date").value = dates[0];
-    document.getElementById("end-date").value   = dates[dates.length-1];
-    filters.start = dates[0];
-    filters.end   = dates[dates.length-1];
-  }
-
-  applyFilters(); // prima render
-}
-
-/* ======== FILTERING ======== */
-function applyFilters(){
-  const start = filters.start;
-  const end   = filters.end;
-  const tipo  = filters.tipo;
-
-  const keep = r => {
-    const inRange = (!start || r.dateStr >= start) && (!end || r.dateStr <= end);
-    if (!inRange) return false;
-    if (tipo === 'adulti' &&  r.isChild) return false;
-    if (tipo === 'bambini' && !r.isChild) return false;
-    return true;
-  };
-
-  const R = records.filter(keep).sort((a,b)=> a.dt - b.dt);
-  renderAll(R);
-}
-
-/* ======== AGGREGATIONS ======== */
-function aggregateDaily(R){
-  const map = new Map(); // key=dateStr
-  for (const r of R){
-    if (!map.has(r.dateStr)){
-      map.set(r.dateStr, {
-        date: r.dateStr,
-        n:0, adulti:0, bambini:0,
-        euro:0
-      });
-    }
-    const d = map.get(r.dateStr);
-    d.n += 1;
-    if (r.isChild){ d.bambini += 1; } else { d.adulti += 1; }
-    d.euro += r.euro;
-  }
-  const arr = [...map.values()].sort((a,b)=> a.date.localeCompare(b.date));
-  return arr;
-}
-
-function aggregateHour(R){
-  // per ora 0..23, con split adulti/bambini
-  const by = Array.from({length:24}, (_,h)=>({hour:h, n:0, adulti:0, bambini:0, euro:0}));
-  for (const r of R){
-    const b = by[r.hour];
-    b.n += 1;
-    if (r.isChild){ b.bambini += 1; } else { b.adulti += 1; }
-    b.euro += r.euro;
-  }
-  return by;
-}
-
-function aggregateHeatmap(R){
-  // y = dateStr (ord), x = 0..23, z = counts
-  const dates = [...new Set(R.map(r=>r.dateStr))].sort();
-  const x = Array.from({length:24}, (_,i)=>i);
-  const z = dates.map(d=>{
-    const row = Array(24).fill(0);
-    R.forEach(r=>{ if (r.dateStr===d) row[r.hour]++; });
-    return row;
-  });
-  // anche split adulti/bambini (per hotspot table)
-  const zA = dates.map(d=>{
-    const row = Array(24).fill(0);
-    R.forEach(r=>{ if (r.dateStr===d && !r.isChild) row[r.hour]++; });
-    return row;
-  });
-  const zB = dates.map(d=>{
-    const row = Array(24).fill(0);
-    R.forEach(r=>{ if (r.dateStr===d && r.isChild) row[r.hour]++; });
-    return row;
-  });
-  return {dates, x, z, zA, zB};
-}
-
-function aggregateDOWBoxes(R){
-  // boxplot per giorno della settimana: distribuzione dei clienti per giorno
-  // 1) daily totals
-  const d = aggregateDaily(R);
-  const byDOW = Array.from({length:7}, ()=>[]);
-  for (const row of d){
-    const wd = (new Date(row.date+"T00:00:00Z")).getUTCDay();
-    byDOW[wd].push(row.n);
-  }
-  return byDOW;
-}
-
-function interarrivalMinutes(R){
-  const mins = [];
-  for (let i=1;i<R.length;i++){
-    const deltaMs = (R[i].dt - R[i-1].dt);
-    const m = Math.max(0, Math.round(deltaMs/60000));
-    mins.push(m);
-  }
-  return mins;
-}
-
-function paretoByHour(R){
-  // Pareto sulle (date,ora): quali ore (in tutto il periodo filtrato) generano più clienti
-  const key = (d,h)=> `${d}|${h}`;
-  const map = new Map();
-  for (const r of R){
-    const k = key(r.dateStr, r.hour);
-    map.set(k, (map.get(k)||0)+1);
-  }
-  const arr = [...map.entries()].map(([k,n])=>{
-    const [d,h] = k.split("|");
-    return { date: d, hour: Number(h), n };
-  }).sort((a,b)=> b.n - a.n);
-  const cum = [];
-  let s = 0;
-  const tot = R.length;
-  for (let i=0;i<arr.length;i++){
-    s += arr[i].n;
-    cum.push(s/tot*100);
-  }
-  return { items: arr, cum };
-}
-
-/* ======== RENDER ======== */
-function renderAll(R){
-  // === Aggregazioni base ===
-  daily = aggregateDaily(R);
-  const byHour = aggregateHour(R);
-  const heat   = aggregateHeatmap(R);
-  const byDow  = aggregateDOWBoxes(R);
-  const inter  = interarrivalMinutes(R);
-  const pto    = paretoByHour(R);
-
-  // === KPI ===
-  const totClients = R.length;
-  const totRev     = R.reduce((s,r)=>s+r.euro,0);
-  const daysN      = daily.length;
-  const avgDay     = daysN ? (totClients/daysN) : 0;
-  const sdDay      = (()=>{
-    const arr = daily.map(d=>d.n);
-    const m = arr.reduce((s,x)=>s+x,0)/(arr.length||1);
-    const v = arr.reduce((s,x)=>s+(x-m)*(x-m),0)/(arr.length||1);
-    return Math.sqrt(v)||0;
-  })();
-  const cv         = avgDay>0 ? (sdDay/avgDay*100) : 0;
-  const adults     = R.filter(r=>!r.isChild).length;
-  const pAdults    = pct(adults, totClients);
-  const bestDay    = daily.slice().sort((a,b)=>b.n-a.n)[0];
-  const p95        = percentile(daily.map(d=>d.n), 95);
-  const medInter   = percentile(inter, 50);
-
-  document.getElementById("kpi-total").textContent = fmtInt(totClients);
-  document.getElementById("kpi-rev").textContent   = fmtEur(totRev);
-  document.getElementById("kpi-avg").textContent   = avgDay.toFixed(2);
-  document.getElementById("kpi-cv").textContent    = `${sdDay.toFixed(2)} / ${cv.toFixed(1)}%`;
-  document.getElementById("kpi-adult-share").textContent = `${pAdults.toFixed(1)}%`;
-  document.getElementById("kpi-best-day").textContent    = bestDay ? `${bestDay.date} (${bestDay.n})` : "-";
-  document.getElementById("kpi-p95").textContent   = fmtInt(p95);
-  document.getElementById("kpi-med-inter").textContent = `${fmtInt(medInter)} min`;
-
-  // === TREND GIORNALIERO + ROLLING ===
-  const xDates = daily.map(d=>d.date);
-  const yCount = daily.map(d=>d.n);
-  const yRoll  = rolling(yCount, clamp(Number(filters.rollWindow)||7, 1, 60));
-
-  Plotly.newPlot("trend-daily", [
-    { x:xDates, y:yCount, type:"scatter", mode:"lines+markers", name:"Clienti/Giorno" },
-    { x:xDates, y:yRoll,  type:"scatter", mode:"lines", name:`Media mobile (${filters.rollWindow}g)` }
-  ], { title:"Andamento Giornaliero (con media mobile)", hovermode:"x unified" });
-
-  // === STACK AREA: Adulti vs Bambini nel tempo ===
-  const yA = daily.map(d=>d.adulti);
-  const yB = daily.map(d=>d.bambini);
-  Plotly.newPlot("area-type", [
-    { x:xDates, y:yA, type:"scatter", mode:"lines", stackgroup:"one", name:"Adulti" },
-    { x:xDates, y:yB, type:"scatter", mode:"lines", stackgroup:"one", name:"Bambini" }
-  ], { title:"Composizione Clienti nel Tempo (Stacked Area)", hovermode:"x unified" });
-
-  // === BOX PLOT per giorno della settimana ===
-  const tracesBox = byDow.map((arr, idx)=>({
-    y: arr, type:"box", name: itWeekday(idx)
-  }));
-  Plotly.newPlot("dow-box", tracesBox, { title:"Distribuzione Clienti per Giorno della Settimana (Box Plot)" });
-
-  // === BAR: Ora del giorno (split adulti/bambini) ===
-  const hours = byHour.map(r=>r.hour);
-  const yH_A  = byHour.map(r=>r.adulti);
-  const yH_B  = byHour.map(r=>r.bambini);
-  Plotly.newPlot("hod-bar", [
-    { x:hours, y:yH_A, type:"bar", name:"Adulti" },
-    { x:hours, y:yH_B, type:"bar", name:"Bambini" }
-  ], { title:"Clienti medi per Ora del Giorno", barmode:"stack", xaxis:{dtick:1, title:"Ora"}, yaxis:{title:"Clienti"} });
-
-  // === HEATMAP (giorno x ora) ===
-  Plotly.newPlot("heatmap", [{
-    z: heat.z, x: heat.x, y: heat.dates, type:"heatmap", colorbar:{title:"Clienti"}
-  }], { title:"Heatmap Affluenza (Giorno × Ora)", xaxis:{title:"Ora"}, yaxis:{title:"Data"} });
-
-  // === Inter-arrival histogram ===
-  Plotly.newPlot("interarrival-hist", [{
-    x: inter, type:"histogram", nbinsx: 40, name:"Interarrivo (min)"
-  }], { title:"Distribuzione Interarrivi (minuti)", xaxis:{title:"Minuti"}, yaxis:{title:"Frequenza"} });
-
-  // === Pareto (cumulativo %) sulle finestre (giorno+ora) ===
-  const rank = pto.items.map((_,i)=>i+1);
-  Plotly.newPlot("pareto", [
-    { x: rank, y: pto.items.map(x=>x.n), type:"bar", name:"Clienti per finestra (giorno+ora)" },
-    { x: rank, y: pto.cum, type:"scatter", mode:"lines+markers", yaxis:"y2", name:"Cumulativo %" }
-  ], {
-    title:"Pareto: quali finestre (giorno+ora) generano il traffico",
-    yaxis:{ title:"Clienti" },
-    yaxis2:{ title:"Cumulativo %", overlaying:"y", side:"right", rangemode:"tozero", range:[0,100] },
-    xaxis:{ title:"Rank della finestra (1 = più affollata)" }
   });
 
-  // === Anomalie (z-score) sui daily totals ===
-  const z = zscores(yCount);
-  Plotly.newPlot("anomalies", [
-    { x:xDates, y:yCount, type:"scatter", mode:"lines+markers", name:"Clienti/Giorno" },
-    { x:xDates.filter((_,i)=>Math.abs(z[i])>=2), y:yCount.filter((_,i)=>Math.abs(z[i])>=2),
-      type:"scatter", mode:"markers", name:"Anomalia |z|≥2" }
-  ], { title:"Rilevazione Anomalie sui Clienti Giornalieri (z-score)" });
+  // sort
+  if (sortOpt === "hour") rows.sort((a,b)=>a.hour-b.hour);
+  else if (sortOpt === "total_desc") rows.sort((a,b)=>b.totale-a.totale);
+  else if (sortOpt === "total_asc") rows.sort((a,b)=>a.totale-b.totale);
+  else if (sortOpt === "incasso_desc") rows.sort((a,b)=>b.incasso-a.incasso);
+  else if (sortOpt === "incasso_asc") rows.sort((a,b)=>a.incasso-b.incasso);
 
-  // === Tabella Hotspot (Top 15) ===
-  renderHotspots(heat);
-}
-
-function renderHotspots(heat){
-  // genera top righe per (date,hour)
-  const rows = [];
-  for (let i=0;i<heat.dates.length;i++){
-    for (let h=0; h<heat.x.length; h++){
-      const n = heat.z[i][h];
-      if (n>0){
-        const adulti  = heat.zA[i][h];
-        const bambini = heat.zB[i][h];
-        const euro = adulti*PRICE_ADULTO + bambini*PRICE_BAMBINO;
-        rows.push({ date: heat.dates[i], hour:h, n, adulti, bambini, euro });
-      }
-    }
-  }
-  rows.sort((a,b)=> b.n - a.n);
-  const top = rows.slice(0, 15);
-
-  const tbody = document.querySelector("#table-hotspots tbody");
+  // populate table
+  const tbody = document.querySelector("#hourly-table tbody");
   tbody.innerHTML = "";
-  top.forEach((r, idx)=>{
+  for (const r of rows){
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${idx+1}</td>
-      <td>${r.date}</td>
-      <td>${pad2(r.hour)}:00</td>
-      <td>${r.n}</td>
-      <td>${r.adulti}</td>
-      <td>${r.bambini}</td>
-      <td>${fmtInt(r.euro)}</td>
-    `;
+    tr.innerHTML = `<td>${pad2(r.hour)}:00</td><td>${r.adulti}</td><td>${r.bambini}</td><td>${r.totale}</td><td>${Math.round(r.incasso)}</td>`;
     tbody.appendChild(tr);
-  });
-}
-
-/* ======== CSV EXPORT ======== */
-function exportDailyCSV(){
-  const headers = ["data","clienti","adulti","bambini","incasso"];
-  const lines = [headers.join(",")];
-  for (const d of daily){
-    lines.push([d.date, d.n, d.adulti, d.bambini, d.euro].join(","));
   }
-  download("statistiche_giornaliere.csv", lines.join("\n"));
+
+  // Top hours list (right panel)
+  const top = [...rows].sort((a,b)=>b.totale-a.totale).slice(0,8).map((r,i)=>`${i+1}. ${pad2(r.hour)}:00 — ${r.totale}`).join("<br/>");
+  document.getElementById("top-hours-list").innerHTML = top;
 }
 
-/* ======== UI EVENTS ======== */
-function bindUI(){
-  document.getElementById("apply").addEventListener("click", ()=>{
-    filters.start = document.getElementById("start-date").value || null;
-    filters.end   = document.getElementById("end-date").value   || null;
-    filters.tipo  = document.getElementById("tipo").value || 'all';
-    filters.rollWindow = Math.max(1, parseInt(document.getElementById("roll-window").value||"7",10));
-    applyFilters();
+/* OCCUPANCY CHART + HEATMAP HOUR */
+function renderOccupancy(){
+  const occ = computeOccupancyTimeline(filteredRecords, 5);
+  if (occ.keys.length === 0){
+    Plotly.purge("chart-occupancy");
+    Plotly.newPlot("chart-occupancy", [], { title:"Occupazione (nessun dato)" });
+    Plotly.purge("chart-heatmap-hour");
+    Plotly.newPlot("chart-heatmap-hour", [], { title:"Heatmap oraria (nessun dato)" });
+    return;
+  }
+
+  // occupancy timeline
+  Plotly.newPlot("chart-occupancy", [{
+    x: occ.keys,
+    y: occ.counts,
+    name: "Occupazione stimata",
+    type: "scatter",
+    mode: "lines",
+    line: {shape: "spline"}
+  }], {
+    title: "Occupazione stimata (bucket 5 min) — linea rossa = capienza",
+    shapes: [{
+      type:"line", x0: occ.keys[0], x1: occ.keys[occ.keys.length-1], y0: CAPACITA, y1: CAPACITA,
+      line: { color: 'red', dash: 'dash' }
+    }],
+    yaxis: { range: [0, Math.max(CAPACITA, Math.max(...occ.counts))+5] }
   });
 
-  document.getElementById("reset").addEventListener("click", ()=>{
-    const dates = [...new Set(records.map(r=>r.dateStr))].sort();
-    if (dates.length){
-      document.getElementById("start-date").value = dates[0];
-      document.getElementById("end-date").value   = dates[dates.length-1];
-      document.getElementById("tipo").value = "all";
-      document.getElementById("roll-window").value = 7;
-      filters = { start: dates[0], end: dates[dates.length-1], tipo:'all', rollWindow:7 };
-      applyFilters();
+  // heatmap: hour of day aggregated (0..23)
+  const hourAgg = Array.from({length:24}, ()=>0);
+  for (const r of filteredRecords) hourAgg[r.hour] += 1;
+  Plotly.newPlot("chart-heatmap-hour", [{
+    z: [hourAgg],
+    x: Array.from({length:24}, (_,i)=>i),
+    y: ["Clienti"],
+    type: "heatmap",
+    colorscale: "YlOrRd"
+  }], { title: "Heatmap - Totale arrivi per ora (selezione)" });
+}
+
+/* ANOMALIES / INTERARRIVAL / PARETO */
+function renderAnomaliesAndExtras(){
+  // anomalies: z-score on daily totals
+  const dailyVals = aggregatedDaily.map(d=>d.n);
+  const z = zScores(dailyVals);
+  const dates = aggregatedDaily.map(d=>d.date);
+  const anomalousDates = dates.filter((d,i) => Math.abs(z[i]) >= 2);
+  Plotly.newPlot("chart-anomalies", [
+    { x: dates, y: dailyVals, type:"scatter", mode:"lines+markers", name:"Clienti/giorno" },
+    { x: anomalousDates, y: anomalousDates.map(d=>aggregatedDaily.find(x=>x.date===d).n), type:"scatter", mode:"markers", name:"Anomalie (|z|≥2)", marker:{size:10, color:"red"} }
+  ], { title: "Anomalie giornaliere (z-score)" });
+
+  // interarrival histogram
+  const inter = [];
+  for (let i=1;i<filteredRecords.length;i++){
+    inter.push(Math.max(0, Math.round((filteredRecords[i].dt - filteredRecords[i-1].dt)/60000)));
+  }
+  Plotly.newPlot("chart-interarrival", [{ x: inter, type:"histogram", nbinsx:40 }], { title:"Distribuzione interarrivi (minuti)" });
+
+  // Pareto: finestre (giorno+ora)
+  const map = new Map();
+  for (const r of filteredRecords){
+    const key = `${r.data}|${r.hour}`;
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  const items = [...map.entries()].map(([k,v]) => ({ key:k, n:v })).sort((a,b)=>b.n-a.n);
+  const ranks = items.map((it,i) => i+1);
+  const counts = items.map(it=>it.n);
+  const cumPerc = counts.reduce((acc, val, i, arr) => { const s = (acc.length?acc[acc.length-1]:0) + val; acc.push(Math.round(100 * s / arr.reduce((a,b)=>a+b,0))); return acc; }, []);
+  Plotly.newPlot("chart-pareto", [
+    { x: ranks, y: counts, type:"bar", name:"Clienti/week-slot" },
+    { x: ranks, y: cumPerc, type:"scatter", mode:"lines+markers", name:"Cumulativo %", yaxis:"y2" }
+  ], {
+    title:"Pareto finestre (giorno|ora)",
+    yaxis:{ title:"Clienti" },
+    yaxis2:{ title:"Cumulativo %", overlaying:"y", side:"right", range:[0,100] }
+  });
+
+  // hotspots small table (right panel)
+  const hotTbody = document.querySelector("#hotspots-small tbody");
+  hotTbody.innerHTML = "";
+  items.slice(0,8).forEach((it, i)=>{
+    const [d,h] = it.key.split("|");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${i+1}</td><td>${d}</td><td>${pad2(h)}:00</td><td>${it.n}</td>`;
+    hotTbody.appendChild(tr);
+  });
+}
+
+/* ====== HELPERS ====== */
+function zScores(arr){
+  if (!arr.length) return [];
+  const n = arr.length;
+  const mean = arr.reduce((s,x)=>s+x,0)/n;
+  const varr = arr.reduce((s,x)=>s+(x-mean)*(x-mean),0)/n;
+  const sd = Math.sqrt(varr) || 1;
+  return arr.map(x => (x-mean)/sd);
+}
+
+/* ====== EXPORT CSV ====== */
+function exportHourlyCSV(){
+  const metric = document.getElementById("hour-metric").value;
+  const rows = (aggregatedHourly.summary || []).map(s=>{
+    let adulti, bambini, tot, inc;
+    if (metric === "total"){
+      adulti = s.totalAdulti; bambini = s.totalBamb; tot = s.totalArrivals; inc = s.totalRev;
+    } else if (metric === "max"){
+      adulti = s.maxAdulti; bambini = s.maxBamb; tot = s.maxArrivals; inc = s.maxRev;
+    } else {
+      adulti = s.minAdulti; bambini = s.minBamb; tot = s.minArrivals; inc = s.minRev;
     }
+    return [pad2(s.hour)+":00", adulti, bambini, tot, Math.round(inc)];
   });
-
-  document.getElementById("export-csv").addEventListener("click", exportDailyCSV);
+  const header = ["Ora","Adulti","Bambini","Totale","Incasso"];
+  const body = [header.join(",")].concat(rows.map(r=>r.join(","))).join("\n");
+  download("hourly_stats.csv", body);
 }
 
-/* ======== BOOT ======== */
-document.addEventListener("DOMContentLoaded", ()=>{
-  bindUI();
-  loadData().catch(err=>{
-    console.error("Errore nel caricamento di clienti.json", err);
-    // fallback: messaggio semplice
-    Plotly.newPlot("trend-daily", [], {title:"Impossibile caricare i dati (controlla percorso clienti.json)"});
+function exportDailyCSV(){
+  const header = ["data","clienti","adulti","bambini","incasso"];
+  const rows = aggregatedDaily.map(d=>[d.date, d.n, d.adulti, d.bambini, Math.round(d.revenue)]);
+  const body = [header.join(",")].concat(rows.map(r=>r.join(","))).join("\n");
+  download("daily_stats.csv", body);
+}
+
+function download(filename, text) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/* ====== BIND UI ====== */
+function bindUI(){
+  document.getElementById("apply-filters").addEventListener("click", applyFiltersAndRender);
+  document.getElementById("reset-filters").addEventListener("click", ()=>{
+    // reset to full range
+    if (!rec.length) return;
+    const dates = [...new Set(rec.map(r=>r.data))].sort();
+    document.getElementById("start-date").value = dates[0];
+    document.getElementById("end-date").value = dates[dates.length-1];
+    document.getElementById("filter-type").value = "all";
+    document.getElementById("roll-window").value = 7;
+    applyFiltersAndRender();
   });
-});
+
+  document.getElementById("hour-metric").addEventListener("change", renderHourlyTable);
+  document.getElementById("hour-sort").addEventListener("change", renderHourlyTable);
+  document.getElementById("export-hourly").addEventListener("click", exportHourlyCSV);
+  document.getElementById("export-overall").addEventListener("click", exportDailyCSV);
+  document.getElementById("recompute").addEventListener("click", applyFiltersAndRender);
+
+  // tab switching
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      const tab = btn.dataset.tab;
+      document.querySelectorAll(".tab-panel").forEach(p=>p.style.display="none");
+      document.getElementById("tab-"+tab).style.display = "";
+    });
+  });
+
+  // allow clicking header to sort by that column:
+  document.querySelectorAll("#hourly-table th").forEach(th=>{
+    th.addEventListener("click", ()=>{
+      const col = th.dataset.col;
+      const select = document.getElementById("hour-sort");
+      // toggling primitive: if hour -> total_desc
+      if (col === "hour") select.value = "hour";
+      else if (col === "adulti" || col === "bambini" || col === "totale" || col === "incasso") {
+        // toggle desc on col
+        if (select.value === `${col}_desc`) select.value = `${col}_asc`;
+        else select.value = `${col}_desc`;
+      }
+      renderHourlyTable();
+    });
+  });
+}
+
+/* ====== RENDER ALL ====== */
+function renderAll(){
+  renderKPIs();
+  renderTrendAndDow();
+  renderHourlyTable();
+  renderOccupancy();
+  renderAnomaliesAndExtras();
+}
+
+/* ====== BOOT ====== */
+document.addEventListener("DOMContentLoaded", ()=>{ loadData(); });
+

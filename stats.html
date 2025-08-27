@@ -1,122 +1,215 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Statistiche Avanzate - Cruscotto Clienti</title>
-  <link rel="stylesheet" href="style.css"/>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <style>
-    /* Piccoli aiuti di layout nel caso il tuo style.css non li contenga */
-    .filters, .kpi, .charts, .tables { margin: 1rem auto; max-width: 1200px; }
-    .filters .row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: .75rem; }
-    .filters .row .cell { display:flex; flex-direction:column; gap:.25rem; }
-    .kpi { display:grid; grid-template-columns: repeat(8, minmax(0,1fr)); gap:.75rem; }
-    .kpi .card { padding: .75rem 1rem; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.07); background:#fff; }
-    .kpi .card h4 { margin:0; font-size:.9rem; opacity:.7; }
-    .kpi .card p { margin:.25rem 0 0 0; font-size:1.25rem; font-weight:600; }
-    .chart { width: 100%; height: 520px; margin: 1rem 0; }
-    .tables table { width:100%; border-collapse: collapse; }
-    .tables th, .tables td { border-bottom: 1px solid #eee; padding:.5rem .6rem; text-align:left; }
-    .nav-buttons { display:flex; gap:.5rem; }
-    .nav-buttons a button { cursor:pointer; padding:.35rem .7rem; border-radius:8px; border:1px solid #ddd; background:#fff; }
-    @media (max-width: 980px) {
-      .filters .row { grid-template-columns: 1fr 1fr; }
-      .kpi { grid-template-columns: repeat(2, minmax(0,1fr)); }
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Statistiche Avanzate - Cruscotto Clienti</title>
+
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+<style>
+  /* Stili minimi per un layout leggibile (puoi rimuovere se usi style.css) */
+  :root{ --gap:12px; --card-bg:#fff; --muted:#6b7280; --accent:#2563eb; }
+  body{ font-family:Inter, system-ui, Arial; margin:16px; background:#f6f7fb; color:#111; }
+  header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+  header h1{ margin:0; font-size:1.25rem; }
+  .nav-buttons{ display:flex; gap:8px; }
+  button, select, input { font:inherit; padding:8px 10px; border-radius:8px; border:1px solid #ddd; background:#fff; }
+  .grid{ display:grid; gap:var(--gap); }
+  .filters{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .kpis{ display:grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+  .card{ background:var(--card-bg); padding:12px; border-radius:12px; box-shadow:0 6px 18px rgba(16,24,40,0.04); }
+  .card h4{ margin:0; color:var(--muted); font-size:0.85rem; }
+  .card p{ margin:6px 0 0; font-size:1.15rem; font-weight:700; }
+  .main-charts{ display:grid; grid-template-columns: 1fr 380px; gap:12px; align-items:start; }
+  .right-column{ display:grid; gap:12px; }
+  .chart{ min-height:280px; background:#fff; padding:8px; border-radius:8px; box-shadow:0 4px 12px rgba(2,6,23,0.04); }
+  .tabs{ display:flex; gap:8px; margin:8px 0; }
+  .tabs button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .table-controls{ display:flex; gap:8px; align-items:center; margin:8px 0; }
+  table{ width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 6px 18px rgba(16,24,40,0.04); }
+  th,td{ padding:8px 10px; border-bottom:1px solid #eee; text-align:left; font-size:0.95rem; }
+  th{ background:#fafafa; cursor:pointer; user-select:none; }
+  tr.totale{ font-weight:700; background: #f3f4f6; }
+  .small{ font-size:0.85rem; color:var(--muted); }
+  .export{ margin-left:auto; }
+  @media (max-width:1000px){ .main-charts{ grid-template-columns: 1fr; } .right-column{ order:2 } }
+</style>
 </head>
 <body>
+
 <header>
-  <h1>Statistiche Avanzate</h1>
-  <p>Analisi storiche, anomalie, distribuzioni e pattern temporali</p>
+  <div>
+    <h1>📈 Statistiche Avanzate - Cruscotto Clienti</h1>
+    <div class="small">Filtro, analisi oraria (Totale / Massimo / Minimo), occupazione stimata e molto altro</div>
+  </div>
   <div class="nav-buttons">
-    <a href="index.html"><button id="btn-home">Home</button></a>
-    <a href="stats.html"><button id="btn-stats">Stats</button></a>
+    <a href="index.html"><button>⬅️ Home</button></a>
+    <a href="stats.html"><button>📊 Stats</button></a>
   </div>
 </header>
 
-<main>
-  <!-- FILTRI -->
-  <section class="filters">
-    <div class="row">
-      <div class="cell">
-        <label for="start-date">Data da</label>
-        <input type="date" id="start-date"/>
+<!-- FILTRI -->
+<section class="filters">
+  <label class="small">Da
+    <input type="date" id="start-date" />
+  </label>
+  <label class="small">A
+    <input type="date" id="end-date" />
+  </label>
+  <label class="small">Tipo
+    <select id="filter-type">
+      <option value="all">Tutti</option>
+      <option value="adulti">Adulti</option>
+      <option value="bambini">Bambini</option>
+    </select>
+  </label>
+
+  <label class="small">Window media mobile (giorni)
+    <input type="number" id="roll-window" min="1" value="7" style="width:90px"/>
+  </label>
+
+  <button id="apply-filters">Applica</button>
+  <button id="reset-filters">Reset</button>
+  <div class="export" style="margin-left:auto">
+    <button id="export-hourly">Esporta Tabella Oraria CSV</button>
+  </div>
+</section>
+
+<!-- KPI -->
+<section class="kpis">
+  <div class="card">
+    <h4>Clienti totali</h4>
+    <p id="kpi-total">0</p>
+  </div>
+  <div class="card">
+    <h4>Incasso totale</h4>
+    <p id="kpi-revenue">0 €</p>
+  </div>
+  <div class="card">
+    <h4>Media clienti/giorno</h4>
+    <p id="kpi-avg">0</p>
+  </div>
+  <div class="card">
+    <h4>Saturazione max rilevata</h4>
+    <p id="kpi-saturation">0%</p>
+  </div>
+  <div class="card">
+    <h4>Ora di picco (stimata)</h4>
+    <p id="kpi-peak">-</p>
+  </div>
+  <div class="card">
+    <h4>Mediana interarrivo</h4>
+    <p id="kpi-med-inter">-</p>
+  </div>
+</section>
+
+<!-- AREA PRINCIPALE: GRAFICI + PANNELLO DESTRO -->
+<section class="main-charts">
+  <div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="overview">Panoramica</button>
+        <button class="tab-btn" data-tab="per-hour">Analisi per orario</button>
+        <button class="tab-btn" data-tab="occupancy">Occupazione</button>
+        <button class="tab-btn" data-tab="anomalies">Anomalie & Trend</button>
       </div>
-      <div class="cell">
-        <label for="end-date">Data a</label>
-        <input type="date" id="end-date"/>
+
+      <div style="margin-left:auto" class="small">Permanenza media: <strong>1h 15m</strong> • Capienza: <strong>60</strong></div>
+    </div>
+
+    <!-- TAB: OVERVIEW -->
+    <div id="tab-overview" class="tab-panel" style="margin-top:8px;">
+      <div class="chart" id="chart-trend-daily"></div>
+      <div style="height:12px"></div>
+      <div class="chart" id="chart-dow"></div>
+      <div style="height:12px"></div>
+      <div class="chart" id="chart-stack-type"></div>
+    </div>
+
+    <!-- TAB: PER HOUR (TABELLA INTERATTIVA) -->
+    <div id="tab-per-hour" class="tab-panel" style="display:none; margin-top:8px;">
+      <div class="table-controls">
+        <label class="small">Visualizza:
+          <select id="hour-metric">
+            <option value="total">Totale (arrivi per ora)</option>
+            <option value="max">Massimo (per ora, per giorno)</option>
+            <option value="min">Minimo (per ora, per giorno)</option>
+          </select>
+        </label>
+
+        <label class="small">Ordinamento:
+          <select id="hour-sort">
+            <option value="hour">Ora</option>
+            <option value="total_desc">Totale ↓</option>
+            <option value="total_asc">Totale ↑</option>
+            <option value="incasso_desc">Incasso ↓</option>
+            <option value="incasso_asc">Incasso ↑</option>
+          </select>
+        </label>
+
+        <div style="margin-left:auto" class="small">Tip: clicca intestazioni per ordinare</div>
       </div>
-      <div class="cell">
-        <label for="tipo">Tipo cliente</label>
-        <select id="tipo">
-          <option value="all">Tutti</option>
-          <option value="adulti">Solo Adulti</option>
-          <option value="bambini">Solo Bambini</option>
-        </select>
-      </div>
-      <div class="cell">
-        <label for="roll-window">Media mobile (giorni)</label>
-        <input type="number" id="roll-window" min="1" step="1" value="7"/>
+
+      <div style="overflow:auto; border-radius:8px;">
+        <table id="hourly-table">
+          <thead>
+            <tr>
+              <th data-col="hour">Ora</th>
+              <th data-col="adulti">Adulti</th>
+              <th data-col="bambini">Bambini</th>
+              <th data-col="totale">Totale</th>
+              <th data-col="incasso">Incasso (€)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
-    <div style="margin-top:.75rem; display:flex; gap:.5rem;">
-      <button id="apply">Applica Filtri</button>
-      <button id="reset">Reset</button>
-      <button id="export-csv" title="Esporta statistiche giornaliere">Esporta CSV</button>
+
+    <!-- TAB: OCCUPANCY -->
+    <div id="tab-occupancy" class="tab-panel" style="display:none; margin-top:8px;">
+      <div class="chart" id="chart-occupancy"></div>
+      <div class="chart" id="chart-heatmap-hour"></div>
     </div>
-  </section>
 
-  <!-- KPI -->
-  <section class="kpi" id="kpi-cards">
-    <div class="card"><h4>Clienti totali</h4><p id="kpi-total">0</p></div>
-    <div class="card"><h4>Incasso totale</h4><p id="kpi-rev">0 €</p></div>
-    <div class="card"><h4>Media clienti/giorno</h4><p id="kpi-avg">0</p></div>
-    <div class="card"><h4>Dev. Std / CV</h4><p id="kpi-cv">0 / 0%</p></div>
-    <div class="card"><h4>Quota Adulti</h4><p id="kpi-adult-share">0%</p></div>
-    <div class="card"><h4>Giorno più affollato</h4><p id="kpi-best-day">-</p></div>
-    <div class="card"><h4>P95 clienti/giorno</h4><p id="kpi-p95">0</p></div>
-    <div class="card"><h4>Mediana interarrivo</h4><p id="kpi-med-inter">0 min</p></div>
-  </section>
+    <!-- TAB: ANOMALIES -->
+    <div id="tab-anomalies" class="tab-panel" style="display:none; margin-top:8px;">
+      <div class="chart" id="chart-anomalies"></div>
+      <div class="chart" id="chart-interarrival"></div>
+      <div style="height:8px"></div>
+      <div class="chart" id="chart-pareto"></div>
+    </div>
+  </div>
 
-  <!-- CHARTS -->
-  <section class="charts">
-    <div id="trend-daily" class="chart"></div>
-    <div id="area-type" class="chart"></div>
-    <div id="dow-box" class="chart"></div>
-    <div id="hod-bar" class="chart"></div>
-    <div id="heatmap" class="chart"></div>
-    <div id="interarrival-hist" class="chart"></div>
-    <div id="pareto" class="chart"></div>
-    <div id="anomalies" class="chart"></div>
-  </section>
+  <!-- PANNELLO DESTRO: sintesi e hotspot -->
+  <aside class="right-column">
+    <div class="card">
+      <h4>Top 8 Fasce orarie (totali)</h4>
+      <div id="top-hours-list" class="small"></div>
+    </div>
 
-  <!-- TABELLE -->
-  <section class="tables">
-    <h3>Top Hotspot (giorno + ora)</h3>
-    <table id="table-hotspots">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Data</th>
-          <th>Ora</th>
-          <th>Clienti</th>
-          <th>Adulti</th>
-          <th>Bambini</th>
-          <th>Incasso (€)</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </section>
-</main>
+    <div class="card">
+      <h4>Top Hotspot (giorno+ora)</h4>
+      <table id="hotspots-small" style="width:100%; font-size:0.9rem;">
+        <thead><tr><th>#</th><th>Data</th><th>Ora</th><th>Clienti</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
 
-<footer>
-  <p>© 2025 Cruscotto Clienti - Tutti i diritti riservati</p>
-</footer>
+    <div class="card">
+      <h4>Azioni</h4>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button id="export-overall">Esporta Giornaliere CSV</button>
+        <button id="recompute">Ricalcola</button>
+      </div>
+    </div>
+  </aside>
+</section>
+
+<footer style="margin-top:18px;" class="small">© 2025 Cruscotto Clienti</footer>
 
 <script src="stats.js"></script>
 </body>
 </html>
-
