@@ -6,7 +6,6 @@ const CAPACITA = 60;
 let raw=[], rec=[], aggregatedDaily=[], aggregatedHourly=[], filteredRecords=[];
 
 const pad2 = x => String(x).padStart(2,"0");
-const toEur = n => `${n.toFixed(2)} €`;
 const isChild = s => (s||"").toLowerCase().includes("bamb");
 
 function toDateObj(dateStr,timeStr){
@@ -35,7 +34,7 @@ async function loadData(){
             price: child ? PRICE_BAMBINO : PRICE_ADULTO
         };
     }).filter(r=>r.data);
-    
+
     const dates = [...new Set(rec.map(r=>r.data))].sort();
     if(dates.length){
         document.getElementById("start-date").value = dates[0];
@@ -141,14 +140,12 @@ function computeKPIs(){
     const dailyCounts = aggregatedDaily.map(d=>d.n);
     const avgPerDay = dailyCounts.length ? dailyCounts.reduce((s,x)=>s+x,0)/dailyCounts.length : 0;
 
-    // giorno di picco
     const peakDay = aggregatedDaily.reduce((max,d)=>d.n>max.n?d:max,{n:0,revenue:0,date:"-"});
 
     const occ = computeOccupancyTimeline(filteredRecords,5);
     const peakCount = occ.counts.length ? Math.max(...occ.counts) : 0;
     const saturation = CAPACITA>0 ? (peakCount/CAPACITA*100) : 0;
 
-    // previsione semplice: media arrivi 9-17
     const preds = aggregatedHourly.summary.map(h=>h.totalArrivals/dailyCounts.length||0);
     const predStr = preds.map((v,i)=>`${pad2(i+9)}:00→${Math.round(v)}`).join(", ");
 
@@ -157,7 +154,7 @@ function computeKPIs(){
         totRevenue,
         avgRevenuePerClient,
         avgPerDay: avgPerDay.toFixed(2),
-        peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + peakDay.revenue + " € incasso)",
+        peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + peakDay.revenue + " €)",
         peakCount,
         saturation: Math.round(saturation),
         predStr
@@ -168,7 +165,8 @@ function computeKPIs(){
 function renderKPIs(){
     const k = computeKPIs();
     document.getElementById("kpi-total").textContent = k.totClients;
-    document.getElementById("kpi-revenue").textContent = k.totRevenue + ` € (${k.avgRevenuePerClient} € per cliente)`; 
+    document.getElementById("kpi-revenue").textContent = k.totRevenue + " €";
+    document.getElementById("kpi-revenue-per-client").textContent = k.avgRevenuePerClient + " €";
     document.getElementById("kpi-avg").textContent = k.avgPerDay;
     document.getElementById("kpi-peak").textContent = k.peakDay;
     document.getElementById("kpi-saturation").textContent = k.saturation + "%";
@@ -179,9 +177,10 @@ function renderHourlyTable(){
     const tbody = document.querySelector("#hourly-table tbody");
     tbody.innerHTML = "";
     aggregatedHourly.summary.forEach(h=>{
-        const tr = document.createElement("tr");
         const pred = Math.round(h.totalArrivals/aggregatedDaily.length||0);
-        tr.innerHTML=`<td>${pad2(h.hour)}:00</td><td>${h.totalAdulti}</td><td>${h.totalBamb}</td><td>${h.totalArrivals}</td><td>${h.totalRev} €</td><td>${pred}</td>`;
+        const tr = document.createElement("tr");
+        tr.innerHTML=`<td>${pad2(h.hour)}:00</td><td>${h.totalAdulti}</td><td>${h.totalBamb}</td>
+        <td>${h.totalArrivals}</td><td>${h.totalRev} €</td><td>${pred}</td>`;
         tbody.appendChild(tr);
     });
 }
@@ -236,12 +235,12 @@ function exportCSV(type){
     let body="";
     if(type==="hourly"){
         const header=["Ora","Adulti","Bambini","Totale","Incasso","Previsti"];
-        const rows = aggregatedHourly.summary.map(h=>[pad2(h.hour)+":00",h.totalAdulti,h.totalBamb,h.totalArrivals,h.totalRev + " €",Math.round(h.totalArrivals/aggregatedDaily.length||0)]);
+        const rows = aggregatedHourly.summary.map(h=>[pad2(h.hour)+":00",h.totalAdulti,h.totalBamb,h.totalArrivals,h.totalRev+" €",Math.round(h.totalArrivals/aggregatedDaily.length||0)]);
         body = [header.join(","),...rows.map(r=>r.join(","))].join("\n");
         download("hourly.csv",body);
     } else {
         const header=["Data","Clienti","Adulti","Bambini","Incasso"];
-        const rows = aggregatedDaily.map(d=>[d.date,d.n,d.adulti,d.bambini,d.revenue + " €"]);
+        const rows = aggregatedDaily.map(d=>[d.date,d.n,d.adulti,d.bambini,d.revenue+" €"]);
         body = [header.join(","),...rows.map(r=>r.join(","))].join("\n");
         download("daily.csv",body);
     }
