@@ -76,7 +76,7 @@ function aggregateDaily(R){
         const d = map.get(r.data);
         d.n++;
         r.isChild ? d.bambini++ : d.adulti++;
-        d.revenue += r.price; // totale intero
+        d.revenue += r.price;
     }
     return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
 }
@@ -135,10 +135,11 @@ function computeOccupancyTimeline(R,bucketMinutes=5){
 /* KPI */
 function computeKPIs(){
     const totClients = filteredRecords.length;
-    const totRevenue = filteredRecords.reduce((s,r)=>s+r.price,0); // totale intero
-    const avgRevenuePerClient = totClients ? (totRevenue/totClients).toFixed(2) : 0; // decimali solo per cliente
+    const totRevenue = filteredRecords.reduce((s,r)=>s+r.price,0);
+    const avgRevenuePerClient = totClients ? (totRevenue/totClients).toFixed(2) : "0.00";
+
     const dailyCounts = aggregatedDaily.map(d=>d.n);
-    const avgPerDay = dailyCounts.length ? dailyCounts.reduce((s,x)=>s+x,0)/dailyCounts.length : 0;
+    const avgPerDay = dailyCounts.length ? (dailyCounts.reduce((s,x)=>s+x,0)/dailyCounts.length).toFixed(2) : "0.00";
 
     const peakDay = aggregatedDaily.reduce((max,d)=>d.n>max.n?d:max,{n:0,revenue:0,date:"-"});
 
@@ -153,7 +154,7 @@ function computeKPIs(){
         totClients,
         totRevenue,
         avgRevenuePerClient,
-        avgPerDay: avgPerDay.toFixed(2),
+        avgPerDay,
         peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + peakDay.revenue + " €)",
         peakCount,
         saturation: Math.round(saturation),
@@ -162,44 +163,16 @@ function computeKPIs(){
 }
 
 /* RENDER */
-function computeKPIs(){
-    const totClients = filteredRecords.length;
-
-    // Totale incasso (somma dei prezzi reali per cliente)
-    const totRevenue = filteredRecords.reduce((s,r)=>s + r.price, 0);
-
-    // Incasso medio per cliente
-    const avgRevenuePerClient = totClients ? (totRevenue / totClients) : 0;
-
-    // Media clienti/giorno
-    const dailyCounts = aggregatedDaily.map(d=>d.n);
-    const avgPerDay = dailyCounts.length ? (dailyCounts.reduce((s,x)=>s+x,0)/dailyCounts.length) : 0;
-
-    // Giorno di picco
-    const peakDay = aggregatedDaily.reduce((max,d)=>d.n>max.n?d:max,{n:0,revenue:0,date:"-"});
-
-    // Occupancy
-    const occ = computeOccupancyTimeline(filteredRecords,5);
-    const peakCount = occ.counts.length ? Math.max(...occ.counts) : 0;
-    const saturation = CAPACITA>0 ? (peakCount/CAPACITA*100) : 0;
-
-    // Previsioni semplici per ogni ora
-    const preds = aggregatedHourly.summary.map(h=>h.totalArrivals / dailyCounts.length || 0);
-    const predStr = preds.map((v,i)=>`${pad2(i+9)}:00→${Math.round(v)}`).join(", ");
-
-    return {
-        totClients,
-        totRevenue,
-        avgRevenuePerClient: avgRevenuePerClient.toFixed(2),
-        avgPerDay: avgPerDay.toFixed(2),
-        peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + peakDay.revenue + " €)",
-        peakCount,
-        saturation: Math.round(saturation),
-        predStr
-    };
+function renderKPIs(){
+    const k = computeKPIs();
+    document.getElementById("kpi-total").textContent = k.totClients;
+    document.getElementById("kpi-revenue").textContent = k.totRevenue + " €";
+    document.getElementById("kpi-revenue-per-client").textContent = k.avgRevenuePerClient + " €";
+    document.getElementById("kpi-avg").textContent = k.avgPerDay;
+    document.getElementById("kpi-peak").textContent = k.peakDay;
+    document.getElementById("kpi-saturation").textContent = k.saturation + "%";
+    document.getElementById("kpi-predict").textContent = k.predStr;
 }
-
-
 
 function renderHourlyTable(){
     const tbody = document.querySelector("#hourly-table tbody");
@@ -208,7 +181,7 @@ function renderHourlyTable(){
         const pred = Math.round(h.totalArrivals/aggregatedDaily.length||0);
         const tr = document.createElement("tr");
         tr.innerHTML=`<td>${pad2(h.hour)}:00</td><td>${h.totalAdulti}</td><td>${h.totalBamb}</td>
-        <td>${h.totalArrivals}</td><td>${h.totalRev} €</td><td>${pred}</td>`;
+        <td>${h.totalArrivals}</td><td>${h.totalRev.toFixed(2)} €</td><td>${pred}</td>`;
         tbody.appendChild(tr);
     });
 }
@@ -262,13 +235,26 @@ function bindUI(){
 function exportCSV(type){
     let body="";
     if(type==="hourly"){
-        const header=["Ora","Adulti","Bambini","Totale","Incasso","Previsti"];
-        const rows = aggregatedHourly.summary.map(h=>[pad2(h.hour)+":00",h.totalAdulti,h.totalBamb,h.totalArrivals,h.totalRev+" €",Math.round(h.totalArrivals/aggregatedDaily.length||0)]);
+        const header=["Ora","Adulti","Bambini","Totale","Incasso (€)","Previsti"];
+        const rows = aggregatedHourly.summary.map(h=>[
+            pad2(h.hour)+":00",
+            h.totalAdulti,
+            h.totalBamb,
+            h.totalArrivals,
+            h.totalRev.toFixed(2)+" €",
+            Math.round(h.totalArrivals/aggregatedDaily.length||0)
+        ]);
         body = [header.join(","),...rows.map(r=>r.join(","))].join("\n");
         download("hourly.csv",body);
     } else {
-        const header=["Data","Clienti","Adulti","Bambini","Incasso"];
-        const rows = aggregatedDaily.map(d=>[d.date,d.n,d.adulti,d.bambini,d.revenue+" €"]);
+        const header=["Data","Clienti","Adulti","Bambini","Incasso (€)"];
+        const rows = aggregatedDaily.map(d=>[
+            d.date,
+            d.n,
+            d.adulti,
+            d.bambini,
+            d.revenue.toFixed(2)+" €"
+        ]);
         body = [header.join(","),...rows.map(r=>r.join(","))].join("\n");
         download("daily.csv",body);
     }
