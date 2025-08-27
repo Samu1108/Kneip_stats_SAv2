@@ -11,57 +11,6 @@ const incassoBambini = bambini.map(b => b * prezzoBambino);
 const incassoAdulti  = adulti.map(a => a * prezzoAdulto);
 const incassoTotale  = totale.map((t,i) => incassoBambini[i] + incassoAdulti[i]);
 
-// === TABELLA ===
-function creaTabella() {
-  const table = document.getElementById("orari-table");
-
-  // Intestazione
-  let thead = `<tr>
-    <th>Orario</th>
-    <th>Bambini</th>
-    <th>Adulti</th>
-    <th>Totale</th>
-    <th>Incasso Bambini (€)</th>
-    <th>Incasso Adulti (€)</th>
-    <th>Incasso Totale (€)</th>
-  </tr>`;
-
-  // Righe
-  let rows = orari.map((ora,i) => 
-    `<tr>
-      <td>${ora}</td>
-      <td>${bambini[i]}</td>
-      <td>${adulti[i]}</td>
-      <td>${totale[i]}</td>
-      <td>${incassoBambini[i]}</td>
-      <td>${incassoAdulti[i]}</td>
-      <td>${incassoTotale[i]}</td>
-    </tr>`
-  ).join("");
-
-  // Totale generale
-  const totaleBambini = bambini.reduce((a,b)=>a+b,0);
-  const totaleAdulti = adulti.reduce((a,b)=>a+b,0);
-  const totaleClienti = totale.reduce((a,b)=>a+b,0);
-  const totaleIncassoBambini = incassoBambini.reduce((a,b)=>a+b,0);
-  const totaleIncassoAdulti = incassoAdulti.reduce((a,b)=>a+b,0);
-  const totaleIncassoTotale = incassoTotale.reduce((a,b)=>a+b,0);
-
-  rows += `<tr class="totale">
-    <td>TOTALE</td>
-    <td>${totaleBambini}</td>
-    <td>${totaleAdulti}</td>
-    <td>${totaleBambini + totaleAdulti}</td>
-    <td>${totaleIncassoBambini}</td>
-    <td>${totaleIncassoAdulti}</td>
-    <td>${totaleIncassoTotale}</td>
-  </tr>`;
-
-  table.innerHTML = thead + rows;
-}
-creaTabella();
-
-// === GRAFICI ===
 const chartHeight = 1000;
 
 // 1. Clienti per Orario
