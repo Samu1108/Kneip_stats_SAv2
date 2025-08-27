@@ -29,11 +29,17 @@ tr.totale{font-weight:700;background:#f1f3f5;}
 .tabs button.active{background:#2563eb;color:#fff;border-color:#2563eb;}
 </style>
 </head>
+
 <body>
-<header>
-<h1>📊 Statistiche Avanzate - Clienti</h1>
-<div class="small">Analisi dettagliata dal vivo con previsione ore 9-17</div>
+<header style="display:flex; justify-content:space-between; align-items:center; padding:0 16px; height:200px; border-bottom:2px solid #ccc;">
+    <h1 style="margin:0; flex:1; text-align:center;">📊 Statistiche Avanzate - Clienti</h1>
+    <div class="nav-buttons" style="display:flex; gap:10px;">
+        <a href="index.html"><button id="btn-home">Home</button></a>
+        <a href="stats.html"><button id="btn-stats">Stats</button></a>
+    </div>
 </header>
+
+
 
 <section class="filters">
 <label class="small">Da <input type="date" id="start-date"></label>
