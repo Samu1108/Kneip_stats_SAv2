@@ -73,3 +73,4 @@ Plotly.newPlot("chart-heatmap", [{
   type:"heatmap",
   colorscale:"Blues"
 }], { title:"Heatmap Clienti per Orario" });
+
