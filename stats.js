@@ -164,14 +164,29 @@ function computeKPIs(){
 /* RENDER */
 function renderKPIs(){
     const k = computeKPIs();
+
+    // Clienti totali
     document.getElementById("kpi-total").textContent = k.totClients;
+
+    // Incasso totale (somma intera)
     document.getElementById("kpi-revenue").textContent = k.totRevenue + " €";
-    document.getElementById("kpi-revenue-per-client").textContent = k.avgRevenuePerClient + " €";
+
+    // Incasso medio per cliente (decimali solo qui)
+    document.getElementById("kpi-revenue-per-client").textContent = parseFloat(k.avgRevenuePerClient).toFixed(2) + " €";
+
+    // Media clienti/giorno
     document.getElementById("kpi-avg").textContent = k.avgPerDay;
+
+    // Giorno di picco
     document.getElementById("kpi-peak").textContent = k.peakDay;
+
+    // Saturazione massima
     document.getElementById("kpi-saturation").textContent = k.saturation + "%";
+
+    // Previsioni clienti/ora
     document.getElementById("kpi-predict").textContent = k.predStr;
 }
+
 
 function renderHourlyTable(){
     const tbody = document.querySelector("#hourly-table tbody");
