@@ -8,6 +8,7 @@ let raw=[], rec=[], aggregatedDaily=[], aggregatedHourly=[], filteredRecords=[];
 const pad2 = x => String(x).padStart(2,"0");
 const toEur = n => `${n.toFixed(2)} €`;
 const isChild = s => (s||"").toLowerCase().includes("bamb");
+
 function toDateObj(dateStr,timeStr){
     const [Y,M,D] = dateStr.split("-").map(Number);
     const [h,m] = (timeStr||"00:00").split(":").map(Number);
@@ -76,7 +77,7 @@ function aggregateDaily(R){
         const d = map.get(r.data);
         d.n++;
         r.isChild ? d.bambini++ : d.adulti++;
-        d.revenue += r.price;
+        d.revenue += r.price; // totale intero
     }
     return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
 }
@@ -135,8 +136,8 @@ function computeOccupancyTimeline(R,bucketMinutes=5){
 /* KPI */
 function computeKPIs(){
     const totClients = filteredRecords.length;
-    const totRevenue = filteredRecords.reduce((s,r)=>s+r.price,0);
-    const avgRevenuePerClient = totClients ? (totRevenue/totClients).toFixed(2) : 0;
+    const totRevenue = filteredRecords.reduce((s,r)=>s+r.price,0); // totale intero
+    const avgRevenuePerClient = totClients ? (totRevenue/totClients).toFixed(2) : 0; // decimali solo per cliente
     const dailyCounts = aggregatedDaily.map(d=>d.n);
     const avgPerDay = dailyCounts.length ? dailyCounts.reduce((s,x)=>s+x,0)/dailyCounts.length : 0;
 
@@ -156,7 +157,7 @@ function computeKPIs(){
         totRevenue,
         avgRevenuePerClient,
         avgPerDay: avgPerDay.toFixed(2),
-        peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + toEur(peakDay.revenue) + ")",
+        peakDay: peakDay.date + " (" + peakDay.n + " clienti, " + peakDay.revenue + " € incasso)",
         peakCount,
         saturation: Math.round(saturation),
         predStr
@@ -167,7 +168,7 @@ function computeKPIs(){
 function renderKPIs(){
     const k = computeKPIs();
     document.getElementById("kpi-total").textContent = k.totClients;
-    document.getElementById("kpi-revenue").textContent = toEur(k.totRevenue) + ` (${k.avgRevenuePerClient} € per cliente)`;
+    document.getElementById("kpi-revenue").textContent = k.totRevenue + ` € (${k.avgRevenuePerClient} € per cliente)`; 
     document.getElementById("kpi-avg").textContent = k.avgPerDay;
     document.getElementById("kpi-peak").textContent = k.peakDay;
     document.getElementById("kpi-saturation").textContent = k.saturation + "%";
@@ -180,7 +181,7 @@ function renderHourlyTable(){
     aggregatedHourly.summary.forEach(h=>{
         const tr = document.createElement("tr");
         const pred = Math.round(h.totalArrivals/aggregatedDaily.length||0);
-        tr.innerHTML=`<td>${pad2(h.hour)}:00</td><td>${h.totalAdulti}</td><td>${h.totalBamb}</td><td>${h.totalArrivals}</td><td>${toEur(h.totalRev)}</td><td>${pred}</td>`;
+        tr.innerHTML=`<td>${pad2(h.hour)}:00</td><td>${h.totalAdulti}</td><td>${h.totalBamb}</td><td>${h.totalArrivals}</td><td>${h.totalRev} €</td><td>${pred}</td>`;
         tbody.appendChild(tr);
     });
 }
@@ -235,16 +236,17 @@ function exportCSV(type){
     let body="";
     if(type==="hourly"){
         const header=["Ora","Adulti","Bambini","Totale","Incasso","Previsti"];
-        const rows = aggregatedHourly.summary.map(h=>[pad2(h.hour)+":00",h.totalAdulti,h.totalBamb,h.totalArrivals,toEur(h.totalRev),Math.round(h.totalArrivals/aggregatedDaily.length||0)]);
+        const rows = aggregatedHourly.summary.map(h=>[pad2(h.hour)+":00",h.totalAdulti,h.totalBamb,h.totalArrivals,h.totalRev + " €",Math.round(h.totalArrivals/aggregatedDaily.length||0)]);
         body = [header.join(","),...rows.map(r=>r.join(","))].join("\n");
         download("hourly.csv",body);
     } else {
         const header=["Data","Clienti","Adulti","Bambini","Incasso"];
-        const rows = aggregatedDaily.map(d=>[d.date,d.n,d.adulti,d.bambini,toEur(d.revenue)]);
+        const rows = aggregatedDaily.map(d=>[d.date,d.n,d.adulti,d.bambini,d.revenue + " €"]);
         body = [header.join(","),...rows.map(r=>r.join(","))].join("\n");
         download("daily.csv",body);
     }
 }
+
 function download(filename,text){
     const blob = new Blob([text],{type:'text/csv;charset=utf-8;'});
     const link = document.createElement("a");
