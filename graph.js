@@ -62,7 +62,7 @@ function creaTabella() {
 creaTabella();
 
 // === GRAFICI ===
-const chartHeight = 1500;
+const chartHeight = 1000;
 
 // 1. Clienti per Orario
 Plotly.newPlot("chart-clienti-orario", [
