@@ -160,10 +160,15 @@ function aggiornaDati() {
     aggiornaGrafici(fasce);
 }
 
-// Scarica PDF con backup clienti
+// Scarica PDF con backup clienti (versione semplificata)
 async function scaricaBackupPDF() {
     const { dati } = filtraClienti();  
-    const numeroPersone = dati.length;
+
+    // Conta adulti e bambini
+    const numeroAdulti = dati.filter(c => !(c.descrizione||"").toLowerCase().includes("bamb")).length;
+    const numeroBambini = dati.filter(c => (c.descrizione||"").toLowerCase().includes("bamb")).length;
+
+    // Calcolo soldi guadagnati
     const soldiGuadagnati = dati.reduce((sum, c) => ((c.descrizione||"").toLowerCase().includes("bamb") ? sum+2 : sum+3),0);
 
     const oggi = new Date();
@@ -185,20 +190,10 @@ async function scaricaBackupPDF() {
     doc.setFontSize(16);
     doc.text("Backup Clienti", 105, 20, null, null, "center");
     doc.setFontSize(12);
-    doc.text(`Numero di persone: ${numeroPersone}`, 20, 40);
-    doc.text(`Soldi guadagnati: €${soldiGuadagnati}`, 20, 50);
-    doc.text(`Data download: ${dataOggi}`, 20, 60);
-
-    let y = 80;
-    dati.forEach((c,i)=>{
-        const spesa = (c.descrizione||"").toLowerCase().includes("bamb")?2:3;
-        doc.text(`${i+1}. ${c.id} - ${c.descrizione} - Spesa: €${spesa}`, 20, y);
-        y += 7;
-        if(y>270){
-            doc.addPage();
-            y = 20;
-        }
-    });
+    doc.text(`${numeroAdulti} X ADULTI`, 20, 40);
+    doc.text(`${numeroBambini} X BAMBINI`, 20, 50);
+    doc.text(`Soldi guadagnati: €${soldiGuadagnati}`, 20, 60);
+    doc.text(`Data download: ${dataOggi}`, 20, 70);
 
     // Firma
     try {
@@ -207,9 +202,9 @@ async function scaricaBackupPDF() {
             const blob = await img.blob();
             const reader = new FileReader();
             reader.onload = function(e){
-                doc.text(`Molveno (TN), ${dataOggi}`, 20, y+20);
-                doc.text("Samuele Sartori", 20, y+30);
-                doc.addImage(e.target.result,'PNG',5,y+35,60,20);
+                doc.text(`Molveno (TN), ${dataOggi}`, 20, 90);
+                doc.text("Samuele Sartori", 20, 100);
+                doc.addImage(e.target.result,'PNG',5,105,60,20);
                 doc.save(nomeFile);
             };
             reader.readAsDataURL(blob);
@@ -220,6 +215,7 @@ async function scaricaBackupPDF() {
     }
 }
 
+
 // Eventi DOM
 document.addEventListener("DOMContentLoaded", ()=>{
     caricaClienti();
@@ -228,3 +224,4 @@ document.addEventListener("DOMContentLoaded", ()=>{
     document.getElementById("btn-apply").addEventListener("click", aggiornaDati);
     document.getElementById("btn-download").addEventListener("click", scaricaBackupPDF);
 });
+
