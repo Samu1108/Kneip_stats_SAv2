@@ -11,7 +11,7 @@ const incassoBambini = bambini.map(b => b * prezzoBambino);
 const incassoAdulti  = adulti.map(a => a * prezzoAdulto);
 const incassoTotale  = totale.map((t,i) => incassoBambini[i] + incassoAdulti[i]);
 
-const chartHeight = 500;
+const chartHeight = 250;
 
 // 1. Clienti per Orario
 Plotly.newPlot("chart-clienti-orario", [
