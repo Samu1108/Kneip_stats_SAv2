@@ -1,7 +1,7 @@
 # Kneip_stats_SAv2
 # Cruscotto Clienti
 
-**Versione:** 1.0  
+**Versione:** 2.0  
 **Anno:** 2025  
 **Autore:** Cruscotto Clienti  
 
