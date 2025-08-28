@@ -2,16 +2,20 @@ let clientiStats = [];
 
 // Carica dati
 async function caricaClientiStats() {
-    const res = await fetch("clienti.json");
-    clientiStats = await res.json();
-    calcolaStatistiche();
+    try {
+        const res = await fetch("clienti.json");
+        clientiStats = await res.json();
+        calcolaStatistiche();
+    } catch (err) {
+        console.error("Errore caricamento dati clienti:", err);
+    }
 }
 
 function calcolaStatistiche() {
     if (!clientiStats.length) return;
 
-    // Totali
     let adulti = 0, bambini = 0, incassoTotale = 0;
+    let sommaMeteo = 0, countMeteo = 0;
     const perGiorno = {};
     const perOrario = {};
 
@@ -21,12 +25,18 @@ function calcolaStatistiche() {
         incassoTotale += prezzo;
         if (isBambino) bambini++; else adulti++;
 
+        // Meteo: solo se presente e valido
+        if (c.meteo !== undefined && !isNaN(c.meteo)) {
+            sommaMeteo += Number(c.meteo);
+            countMeteo++;
+        }
+
         // Giorno
         if (!perGiorno[c.data]) perGiorno[c.data] = { clienti: 0, incasso: 0 };
         perGiorno[c.data].clienti++;
         perGiorno[c.data].incasso += prezzo;
 
-        // Orario arrotondato (es. 14:00 o 14:30)
+        // Orario arrotondato
         let [h, m] = (c.orario || "00:00").split(":").map(Number);
         m = m < 30 ? "00" : "30";
         const fascia = `${h.toString().padStart(2,"0")}:${m}`;
@@ -35,18 +45,19 @@ function calcolaStatistiche() {
     });
 
     const totaleClienti = adulti + bambini;
-    const incassoMedioCliente = (incassoTotale / totaleClienti).toFixed(2);
+    const incassoMedioCliente = (totaleClienti ? incassoTotale / totaleClienti : 0).toFixed(2);
+    const meteoMedio = countMeteo ? (sommaMeteo / countMeteo).toFixed(1) : "-";
 
     // Giorno con più clienti / incasso
     const giorni = Object.entries(perGiorno);
-    const maxClientiGiorno = giorni.reduce((a,b)=> b[1].clienti > a[1].clienti ? b : a);
-    const maxIncassoGiorno = giorni.reduce((a,b)=> b[1].incasso > a[1].incasso ? b : a);
+    const maxClientiGiorno = giorni.reduce((a,b)=> b[1].clienti > a[1].clienti ? b : a, [null,{clienti:0}]);
+    const maxIncassoGiorno = giorni.reduce((a,b)=> b[1].incasso > a[1].incasso ? b : a, [null,{incasso:0}]);
 
     // Media clienti al giorno
-    const mediaClientiGiorno = (totaleClienti / giorni.length).toFixed(2);
+    const mediaClientiGiorno = (giorni.length ? (totaleClienti / giorni.length).toFixed(2) : 0);
 
-    // Orario con più clienti medi
-    const maxOrario = Object.entries(perOrario).reduce((a,b)=> b[1] > a[1] ? b : a);
+    // Orario con più clienti
+    const maxOrario = Object.entries(perOrario).reduce((a,b)=> b[1] > a[1] ? b : a, ["00:00",0]);
 
     // Giorno della settimana migliore
     const giorniSettimana = ["Domenica","Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
@@ -57,16 +68,16 @@ function calcolaStatistiche() {
         if (!perSettimana[giorno]) perSettimana[giorno] = 0;
         perSettimana[giorno]++;
     });
-    const bestWeekday = Object.entries(perSettimana).reduce((a,b)=> b[1]>a[1]?b:a);
+    const bestWeekday = Object.entries(perSettimana).reduce((a,b)=> b[1]>a[1]?b:a, ["-",0]);
 
     // Top 3 giorni per incasso
     const top3 = [...giorni].sort((a,b)=>b[1].incasso - a[1].incasso).slice(0,3);
 
     // Aggiorna DOM
     aggiornaStatsCards({
-        adulti,bambini,totaleClienti,incassoTotale,incassoMedioCliente,
-        maxClientiGiorno,maxIncassoGiorno,mediaClientiGiorno,
-        maxOrario,bestWeekday,top3
+        adulti, bambini, totaleClienti, incassoTotale, incassoMedioCliente,
+        maxClientiGiorno, maxIncassoGiorno, mediaClientiGiorno,
+        maxOrario, bestWeekday, top3, meteoMedio
     });
 }
 
@@ -89,6 +100,14 @@ function aggiornaStatsCards(stats) {
         li.textContent = `${giorno}: ${dati.incasso} €`;
         list.appendChild(li);
     });
+
+    // Meteo
+    const liMeteo = document.getElementById("meteo");
+liMeteo.textContent = stats.meteoMedio;
+liMeteo.style.color = "#111";       // sempre nero
+liMeteo.style.fontSize = "1.4rem";  // grande come le altre card
+liMeteo.style.fontWeight = "700";
+    meteoList.appendChild(liMeteo);
 }
 
 document.addEventListener("DOMContentLoaded", caricaClientiStats);
