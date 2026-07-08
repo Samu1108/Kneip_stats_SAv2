@@ -13,27 +13,125 @@ async function caricaClienti() {
 }
 
 // Popola select date
+// Popola filtri Anno / Mese / Data
 function caricaDate() {
-    const select = document.getElementById("filter-date");
-    select.innerHTML = '<option value="all">Tutte le date</option>';
-    const dates = [...new Set(clienti.map(c => c.data).filter(Boolean))].sort();
-    dates.forEach(d=>{
+
+    const yearSelect = document.getElementById("filter-year");
+    const monthSelect = document.getElementById("filter-month");
+    const dateSelect = document.getElementById("filter-date");
+
+    yearSelect.innerHTML = '<option value="all">Tutti gli anni</option>';
+    monthSelect.innerHTML = '<option value="all">Tutti i mesi</option>';
+    dateSelect.innerHTML = '<option value="all">Tutte le date</option>';
+
+
+    // ANNI
+    const anni = [...new Set(
+        clienti.map(c => c.data.substring(0,4))
+    )].sort();
+
+
+    anni.forEach(a=>{
         const opt = document.createElement("option");
-        opt.value = d;
-        opt.textContent = d;
-        select.appendChild(opt);
+        opt.value = a;
+        opt.textContent = a;
+        yearSelect.appendChild(opt);
+    });
+
+
+    // DATE COMPLETE
+    const date = [...new Set(
+        clienti.map(c=>c.data)
+    )].sort();
+
+
+    date.forEach(d=>{
+        const opt = document.createElement("option");
+        opt.value=d;
+        opt.textContent=d;
+        dateSelect.appendChild(opt);
     });
 }
+function caricaMesi(){
 
+    const year = document.getElementById("filter-year").value;
+    const monthSelect = document.getElementById("filter-month");
+
+    monthSelect.innerHTML =
+        '<option value="all">Tutti i mesi</option>';
+
+
+    const mesi = [...new Set(
+
+        clienti
+        .filter(c => 
+            year==="all" || c.data.startsWith(year)
+        )
+        .map(c => c.data.substring(5,7))
+
+    )].sort();
+
+
+    mesi.forEach(m=>{
+
+        const opt=document.createElement("option");
+
+        opt.value=m;
+
+        opt.textContent =
+            new Date(2000,m-1,1)
+            .toLocaleString("it-IT",{month:"long"});
+
+        monthSelect.appendChild(opt);
+
+    });
+
+}
 // Filtra clienti per data e tipo
-function filtraClienti() {
-    const date = document.getElementById("filter-date").value;
-    const type = document.getElementById("filter-type").value;
+function filtraClienti(){
 
-    let dati = [...clienti];
-    if(date !== "all") dati = dati.filter(c => c.data === date);
+    const year =
+        document.getElementById("filter-year").value;
 
-    return { dati, type };
+    const month =
+        document.getElementById("filter-month").value;
+
+    const date =
+        document.getElementById("filter-date").value;
+
+    const type =
+        document.getElementById("filter-type").value;
+
+
+    let dati=[...clienti];
+
+
+    // filtro anno
+    if(year!=="all"){
+        dati=dati.filter(c =>
+            c.data.startsWith(year)
+        );
+    }
+
+
+    // filtro mese
+    if(month!=="all"){
+        dati=dati.filter(c =>
+            c.data.substring(5,7)===month
+        );
+    }
+
+
+    // filtro giorno
+    if(date!=="all"){
+        dati=dati.filter(c =>
+            c.data===date
+        );
+    }
+
+
+    return {dati,type};
+
 }
 
 // Calcola aggregati per fascia oraria
@@ -219,7 +317,19 @@ async function scaricaBackupPDF() {
 // Eventi DOM
 document.addEventListener("DOMContentLoaded", ()=>{
     caricaClienti();
-    document.getElementById("filter-date").addEventListener("change", aggiornaDati);
+    document.getElementById("filter-year")
+.addEventListener("change", ()=>{
+    caricaMesi();
+    aggiornaDati();
+});
+
+
+document.getElementById("filter-month")
+.addEventListener("change", aggiornaDati);
+
+
+document.getElementById("filter-date")
+.addEventListener("change", aggiornaDati);
     document.getElementById("filter-type").addEventListener("change", aggiornaDati);
     document.getElementById("btn-apply").addEventListener("click", aggiornaDati);
     document.getElementById("btn-download").addEventListener("click", scaricaBackupPDF);
