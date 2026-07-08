@@ -3,7 +3,7 @@ let clientiStats = [];
 // Carica dati
 async function caricaClientiStats() {
     try {
-        const res = await fetch("clienti.json");
+        const res = await fetch("clienti2.json");
         clientiStats = await res.json();
         calcolaStatistiche();
     } catch (err) {
