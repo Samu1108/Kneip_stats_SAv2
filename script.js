@@ -3,7 +3,7 @@ let clienti = [];
 // === CARICAMENTO DATI CLIENTI ===
 async function caricaClienti() {
     try {
-        const res = await fetch("clienti.json");
+        const res = await fetch("clienti2.json");
         clienti = await res.json();
         caricaDate();
         aggiornaDati();
