@@ -1,5 +1,17 @@
 let clientiStats = [];
 
+
+async function caricaClientiStats() {
+    try {
+        const res = await fetch("clienti2.json");
+        clientiStats = await res.json();
+        popolaFiltroAnni();
+        calcolaStatistiche();
+    } catch (err) {
+        console.error("Errore caricamento dati clienti:", err);
+    }
+}
+
 function popolaFiltri() {
 
     const yearSelect = document.getElementById("filter-year");
