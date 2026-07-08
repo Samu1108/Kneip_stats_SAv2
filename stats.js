@@ -5,7 +5,7 @@ async function caricaClientiStats() {
     try {
         const res = await fetch("clienti2.json");
         clientiStats = await res.json();
-        popolaFiltroAnni();
+        popolaFiltri();
         calcolaStatistiche();
     } catch (err) {
         console.error("Errore caricamento dati clienti:", err);
@@ -116,17 +116,6 @@ function caricaMesi(){
 
     });
 
-}
-// Carica dati
-async function caricaClientiStats() {
-    try {
-        const res = await fetch("clienti.json");
-        clientiStats = await res.json();
-        popolaFiltri();
-        calcolaStatistiche();
-    } catch (err) {
-        console.error("Errore caricamento dati clienti:", err);
-    }
 }
 
 function calcolaStatistiche() {
