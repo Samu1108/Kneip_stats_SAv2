@@ -1,10 +1,29 @@
 let clientiStats = [];
 
+function popolaFiltroAnni() {
+    const select = document.getElementById("filter-year");
+
+    const anni = [...new Set(
+        clientiStats
+            .map(c => c.data?.substring(0, 4))
+            .filter(Boolean)
+    )].sort();
+
+    anni.forEach(anno => {
+        const option = document.createElement("option");
+        option.value = anno;
+        option.textContent = anno;
+        select.appendChild(option);
+    });
+
+    select.addEventListener("change", calcolaStatistiche);
+}
 // Carica dati
 async function caricaClientiStats() {
     try {
-        const res = await fetch("clienti2.json");
+        const res = await fetch("clienti.json");
         clientiStats = await res.json();
+        popolaFiltroAnni();
         calcolaStatistiche();
     } catch (err) {
         console.error("Errore caricamento dati clienti:", err);
@@ -14,12 +33,24 @@ async function caricaClientiStats() {
 function calcolaStatistiche() {
     if (!clientiStats.length) return;
 
+const annoSelezionato =
+    document.getElementById("filter-year")?.value || "all";
+
+let datiFiltrati = [...clientiStats];
+
+if (annoSelezionato !== "all") {
+    datiFiltrati = datiFiltrati.filter(
+        c => c.data && c.data.startsWith(annoSelezionato)
+    );
+}
+
+if (!datiFiltrati.length) return;
     let adulti = 0, bambini = 0, incassoTotale = 0;
     let sommaMeteo = 0, countMeteo = 0;
     const perGiorno = {};
     const perOrario = {};
 
-    clientiStats.forEach(c => {
+    datiFiltrati.forEach(c => {
         const isBambino = (c.descrizione || "").toLowerCase().includes("bamb");
         const prezzo = isBambino ? 2 : 3;
         incassoTotale += prezzo;
@@ -62,7 +93,7 @@ function calcolaStatistiche() {
     // Giorno della settimana migliore
     const giorniSettimana = ["Domenica","Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
     const perSettimana = {};
-    clientiStats.forEach(c=>{
+    datiFiltrati.forEach(c=>{
         const d = new Date(c.data);
         const giorno = giorniSettimana[d.getDay()];
         if (!perSettimana[giorno]) perSettimana[giorno] = 0;
