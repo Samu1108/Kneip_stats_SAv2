@@ -1,29 +1,116 @@
 let clientiStats = [];
 
-function popolaFiltroAnni() {
-    const select = document.getElementById("filter-year");
+function popolaFiltri() {
+
+    const yearSelect = document.getElementById("filter-year");
+    const dateSelect = document.getElementById("filter-date");
+
+
+    yearSelect.innerHTML =
+        '<option value="all">Tutti gli anni</option>';
+
+    dateSelect.innerHTML =
+        '<option value="all">Tutte le date</option>';
+
+
 
     const anni = [...new Set(
         clientiStats
-            .map(c => c.data?.substring(0, 4))
-            .filter(Boolean)
+        .map(c => c.data?.substring(0,4))
+        .filter(Boolean)
     )].sort();
 
-    anni.forEach(anno => {
-        const option = document.createElement("option");
-        option.value = anno;
-        option.textContent = anno;
-        select.appendChild(option);
+
+
+    anni.forEach(anno=>{
+
+        const option=document.createElement("option");
+
+        option.value=anno;
+        option.textContent=anno;
+
+        yearSelect.appendChild(option);
+
     });
 
-    select.addEventListener("change", calcolaStatistiche);
+
+
+    const date=[...new Set(
+        clientiStats
+        .map(c=>c.data)
+        .filter(Boolean)
+    )].sort();
+
+
+
+    date.forEach(d=>{
+
+        const option=document.createElement("option");
+
+        option.value=d;
+        option.textContent=d;
+
+        dateSelect.appendChild(option);
+
+    });
+
+
+    caricaMesi();
+
+}
+function caricaMesi(){
+
+    const anno =
+        document.getElementById("filter-year").value;
+
+
+    const monthSelect =
+        document.getElementById("filter-month");
+
+
+    monthSelect.innerHTML =
+        '<option value="all">Tutti i mesi</option>';
+
+
+
+    const mesi=[...new Set(
+
+        clientiStats
+        .filter(c =>
+            anno==="all" ||
+            c.data.startsWith(anno)
+        )
+        .map(c=>c.data.substring(5,7))
+
+    )].sort();
+
+
+
+    mesi.forEach(m=>{
+
+        const option=document.createElement("option");
+
+        option.value=m;
+
+        option.textContent =
+            new Date(2000,m-1,1)
+            .toLocaleString(
+                "it-IT",
+                {month:"long"}
+            );
+
+
+        monthSelect.appendChild(option);
+
+    });
+
 }
 // Carica dati
 async function caricaClientiStats() {
     try {
         const res = await fetch("clienti.json");
         clientiStats = await res.json();
-        popolaFiltroAnni();
+        popolaFiltri();
         calcolaStatistiche();
     } catch (err) {
         console.error("Errore caricamento dati clienti:", err);
@@ -34,14 +121,52 @@ function calcolaStatistiche() {
     if (!clientiStats.length) return;
 
 const annoSelezionato =
-    document.getElementById("filter-year")?.value || "all";
+    document.getElementById("filter-year").value;
 
-let datiFiltrati = [...clientiStats];
 
-if (annoSelezionato !== "all") {
-    datiFiltrati = datiFiltrati.filter(
-        c => c.data && c.data.startsWith(annoSelezionato)
+const meseSelezionato =
+    document.getElementById("filter-month").value;
+
+
+const dataSelezionata =
+    document.getElementById("filter-date").value;
+
+
+
+let datiFiltrati=[...clientiStats];
+
+
+
+// FILTRO ANNO
+if(annoSelezionato!=="all"){
+
+    datiFiltrati =
+    datiFiltrati.filter(c=>
+        c.data.startsWith(annoSelezionato)
     );
+
+}
+
+
+// FILTRO MESE
+if(meseSelezionato!=="all"){
+
+    datiFiltrati =
+    datiFiltrati.filter(c=>
+        c.data.substring(5,7)===meseSelezionato
+    );
+
+}
+
+
+// FILTRO DATA
+if(dataSelezionata!=="all"){
+
+    datiFiltrati =
+    datiFiltrati.filter(c=>
+        c.data===dataSelezionata
+    );
+
 }
 
 if (!datiFiltrati.length) return;
@@ -141,4 +266,33 @@ liMeteo.style.fontWeight = "700";
     meteoList.appendChild(liMeteo);
 }
 
-document.addEventListener("DOMContentLoaded", caricaClientiStats);
+document.addEventListener("DOMContentLoaded", ()=>{
+
+    caricaClientiStats();
+
+
+    document
+    .getElementById("filter-year")
+    .addEventListener("change",()=>{
+
+        caricaMesi();
+        calcolaStatistiche();
+
+    });
+
+
+
+    document
+    .getElementById("filter-month")
+    .addEventListener("change",
+        calcolaStatistiche
+    );
+
+
+    document
+    .getElementById("filter-date")
+    .addEventListener("change",
+        calcolaStatistiche
+    );
+
+});
