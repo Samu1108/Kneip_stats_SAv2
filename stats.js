@@ -51,7 +51,7 @@ function popolaFiltri() {
         clientiStats
         .map(c=>c.data)
         .filter(Boolean)
-    )].sort();
+    )].sort().reverse();
 
 
 
